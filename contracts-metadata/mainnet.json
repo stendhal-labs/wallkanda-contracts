@@ -1,0 +1,8 @@
+{
+	"name": "Wallkanda Artworks",
+	"description": "Reserved for Future Use",
+	"image": "https://stendhal.ai/wallkanda/logo-square.png",
+	"external_link": "https://wallkanda.art",
+	"seller_fee_basis_points": 250,
+	"fee_recipient": "0x5dB7C94A9f1Ce05d70167de1BDaa12da7a800Fb6"
+}
