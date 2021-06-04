@@ -23,7 +23,7 @@ function mergeConfigs(path) {
 dotenv.config();
 // override .env with specific .env.[network]
 var argv = require('minimist')(process.argv.slice(2));
-if (argv.network && ['rinkeby'].indexOf(argv.network) !== -1) {
+if (argv.network && ['rinkeby', 'mainnet'].indexOf(argv.network) !== -1) {
     mergeConfigs(`.env.${argv.network}`);
 }
 
@@ -43,6 +43,11 @@ module.exports = {
     networks: {
         rinkeby: {
             gasPrice: 90000000000,
+            url: process.env.PROVIDER,
+            accounts: [process.env.DEPLOYER_PKEY],
+        },
+        mainnet: {
+            gasPrice: 50000000000,
             url: process.env.PROVIDER,
             accounts: [process.env.DEPLOYER_PKEY],
         },

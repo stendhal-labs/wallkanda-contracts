@@ -21,6 +21,8 @@ contract EditionsRegistry is
     OpenSeaMandatory,
     EditionsStorage
 {
+    event Mint(uint256 indexed tokenId, bytes indexed data);
+
     function initialize(
         string memory uri,
         address minter,
@@ -45,8 +47,15 @@ contract EditionsRegistry is
     /**
      * @dev See {IERC165-supportsInterface}.
      */
-    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC2981Royalties, ERC1155Upgradeable) returns (bool) {
-        return ERC2981Royalties.supportsInterface(interfaceId) ||
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        virtual
+        override(ERC2981Royalties, ERC1155Upgradeable)
+        returns (bool)
+    {
+        return
+            ERC2981Royalties.supportsInterface(interfaceId) ||
             ERC1155Upgradeable.supportsInterface(interfaceId);
     }
 
@@ -185,13 +194,13 @@ contract EditionsRegistry is
 
         uint256 _currentId = currentId;
         for (uint256 i; i < artists.length; i++) {
-            // mint token for artist with 1% royalties
+            // mint token for artist with 4% royalties
             _mint(
                 _currentId + ids[i],
                 artists[i],
                 amounts[i],
                 artists[i],
-                100,
+                400,
                 data
             );
 
@@ -291,5 +300,7 @@ contract EditionsRegistry is
         if (royalties > 0) {
             _setTokenRoyalty(id, royaltiesRecipient, royalties);
         }
+
+        emit Mint(id, data);
     }
 }
