@@ -6,7 +6,7 @@ module.exports = async ({ getNamedAccounts, deployments, ethers }) => {
 
     const TransferProxy = await deployments.get('TransferProxy');
 
-    const deployResult = await deploy('WallkandaSale', {
+    const deployResult = await deploy('Exchange', {
         from: deployer,
         proxy: {
             proxyContract: 'OpenZeppelinTransparentProxy',
@@ -28,4 +28,4 @@ module.exports = async ({ getNamedAccounts, deployments, ethers }) => {
         [deployResult.address],
     );
 };
-module.exports.tags = ['WallkandaSale'];
+module.exports.tags = ['Exchange'];

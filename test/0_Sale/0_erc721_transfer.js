@@ -2,7 +2,7 @@ const { expect } = require('chai');
 
 const toBN = ethers.BigNumber.from;
 
-describe('WallkandaSale 721', function () {
+describe('Exchange 721', function () {
     // preparation
     // create ERC721
     // mint 1 erc721 for user1
@@ -38,7 +38,7 @@ describe('WallkandaSale 721', function () {
         ] = await ethers.getSigners();
 
         // We get the contract to deploy
-        const WallkandaSale = await ethers.getContractFactory('WallkandaSale');
+        const Exchange = await ethers.getContractFactory('Exchange');
         const TransferProxy = await ethers.getContractFactory('TransferProxy');
 
         // mocks
@@ -48,8 +48,8 @@ describe('WallkandaSale 721', function () {
         transferProxy = await upgrades.deployProxy(TransferProxy, []);
         await transferProxy.deployed();
 
-        // deploy WallkandaSale contract
-        saleContract = await upgrades.deployProxy(WallkandaSale, [
+        // deploy Exchange contract
+        saleContract = await upgrades.deployProxy(Exchange, [
             addr3.address,
             transferProxy.address,
             250,

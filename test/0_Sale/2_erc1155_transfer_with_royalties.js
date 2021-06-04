@@ -2,7 +2,7 @@ const { expect } = require('chai');
 
 const toBN = ethers.BigNumber.from;
 
-describe('WallkandaSale ERC1155 With royalties', function () {
+describe('Exchange ERC1155 With royalties', function () {
     // preparation
     // create ERC1155
     // mint 1 erc1155 for user1
@@ -42,7 +42,7 @@ describe('WallkandaSale ERC1155 With royalties', function () {
         ] = await ethers.getSigners();
 
         // We get the contract to deploy
-        const WallkandaSale = await ethers.getContractFactory('WallkandaSale');
+        const Exchange = await ethers.getContractFactory('Exchange');
         const TransferProxy = await ethers.getContractFactory('TransferProxy');
 
         // mocks
@@ -54,8 +54,8 @@ describe('WallkandaSale ERC1155 With royalties', function () {
         transferProxy = await upgrades.deployProxy(TransferProxy, []);
         await transferProxy.deployed();
 
-        // deploy WallkandaSale contract
-        saleContract = await upgrades.deployProxy(WallkandaSale, [
+        // deploy Exchange contract
+        saleContract = await upgrades.deployProxy(Exchange, [
             addr3.address,
             transferProxy.address,
             250,

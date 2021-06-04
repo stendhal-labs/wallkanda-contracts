@@ -9,8 +9,7 @@ import '@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.
 import '../Proxys/Transfer/ITransferProxy.sol';
 import '../Tokens/ERC2981/IERC2981Royalties.sol';
 
-contract WallkandaSaleStorage {
-
+contract ExchangeStorage {
     event Buy(
         uint256 indexed orderNonce,
         address indexed token,
@@ -29,26 +28,8 @@ contract WallkandaSaleStorage {
         address maker
     );
 
-    enum TokenType {ERC1155, ERC721}
-
-    uint256 public sellerServiceFee;
-    uint256 public buyerServiceFee;
-
-    address payable public beneficiary;
-    ITransferProxy public transferProxy;
-
     // orderId => completed amount
     mapping(bytes32 => uint256) public completed;
-
-    /* An ECDSA signature. */
-    struct Signature {
-        /* v parameter */
-        uint8 v;
-        /* r parameter */
-        bytes32 r;
-        /* s parameter */
-        bytes32 s;
-    }
 
     struct OrderData {
         /* token type, erc721 or erc1155 */

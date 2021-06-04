@@ -1,47 +1,29 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-pragma experimental ABIEncoderV2;
-
-import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol';
 
 import '../Proxys/Transfer/ITransferProxy.sol';
 import '../Tokens/ERC2981/IERC2981Royalties.sol';
-import './WallkandaSaleStorage.sol';
 
-contract WallkandaSale is OwnableUpgradeable, ReentrancyGuardUpgradeable, WallkandaSaleStorage {
+import './BaseExchange.sol';
+import './ExchangeStorage.sol';
+
+contract Exchange is ReentrancyGuardUpgradeable, BaseExchange, ExchangeStorage {
     function initialize(
         address payable _beneficiary,
         address _transferProxy,
         uint256 _buyerServiceFee,
         uint256 _sellerServiceFee
     ) public initializer {
-        __Ownable_init();
+        __BaseExchange_init(
+            _beneficiary,
+            _transferProxy,
+            _buyerServiceFee,
+            _sellerServiceFee
+        );
+
         __ReentrancyGuard_init();
-
-        setBeneficiary(_beneficiary);
-        setTransferProxy(_transferProxy);
-        setBuyerServiceFee(_buyerServiceFee);
-        setSellerServiceFee(_sellerServiceFee);
-    }
-
-    function setBuyerServiceFee(uint256 _buyerServiceFee) public onlyOwner {
-        buyerServiceFee = _buyerServiceFee;
-    }
-
-    function setSellerServiceFee(uint256 _sellerServiceFee) public onlyOwner {
-        sellerServiceFee = _sellerServiceFee;
-    }
-
-    function setTransferProxy(address _transferProxy) public onlyOwner {
-        require(_transferProxy != address(0));
-        transferProxy = ITransferProxy(_transferProxy);
-    }
-
-    function setBeneficiary(address payable _beneficiary) public onlyOwner {
-        require(_beneficiary != address(0));
-        beneficiary = _beneficiary;
     }
 
     function prepareOrderMessage(OrderData memory order)
@@ -53,41 +35,19 @@ contract WallkandaSale is OwnableUpgradeable, ReentrancyGuardUpgradeable, Wallka
     }
 
     /**
-     * @dev verifies signature
-     */
-    function recoverMessageSignature(
-        bytes32 message,
-        Signature calldata signature
-    ) public pure returns (address) {
-        uint8 v = signature.v;
-        if (v < 27) {
-            v += 27;
-        }
-
-        return
-            ecrecover(
-                keccak256(
-                    abi.encodePacked(
-                        '\x19Ethereum Signed Message:\n32',
-                        message
-                    )
-                ),
-                v,
-                signature.r,
-                signature.s
-            );
-    }
-
-    /**
      * @dev this function computes all the values that we need for the exchange.
      * this can be called off-chain before buying so all values can be computed easily
      *
      * It will also help when we introduce tokens for payment
      */
-    function computeValues(OrderData memory order, uint256 amount) public view returns (OrderTransfers memory orderTransfers) {
+    function computeValues(OrderData memory order, uint256 amount)
+        public
+        view
+        returns (OrderTransfers memory orderTransfers)
+    {
         orderTransfers.total = order.unitPrice * amount;
-        uint256 buyerFee = orderTransfers.total * buyerServiceFee / 10000;
-        uint256 sellerFee = orderTransfers.total * sellerServiceFee / 10000;
+        uint256 buyerFee = (orderTransfers.total * buyerServiceFee) / 10000;
+        uint256 sellerFee = (orderTransfers.total * sellerServiceFee) / 10000;
 
         // total of transaction value (price + buyerFee)
         orderTransfers.totalTransaction = orderTransfers.total + buyerFee;
@@ -96,14 +56,20 @@ contract WallkandaSale is OwnableUpgradeable, ReentrancyGuardUpgradeable, Wallka
         // all fees
         orderTransfers.serviceFees = sellerFee + buyerFee;
 
-        (address royaltiesRecipient, uint256 royaltiesAmount) = _getRoyalties(order.token, order.tokenId, orderTransfers.total);
+        (address royaltiesRecipient, uint256 royaltiesAmount) =
+            _getRoyalties(order.token, order.tokenId, orderTransfers.total);
 
         // if there are royalties
-        if (royaltiesAmount > 0 && royaltiesAmount <= orderTransfers.sellerEndValue) {
+        if (
+            royaltiesAmount > 0 &&
+            royaltiesAmount <= orderTransfers.sellerEndValue
+        ) {
             orderTransfers.royaltiesRecipient = royaltiesRecipient;
             orderTransfers.royaltiesAmount = royaltiesAmount;
             // substract royalties to end value
-            orderTransfers.sellerEndValue = orderTransfers.sellerEndValue - royaltiesAmount;
+            orderTransfers.sellerEndValue =
+                orderTransfers.sellerEndValue -
+                royaltiesAmount;
         }
     }
 
@@ -113,21 +79,19 @@ contract WallkandaSale is OwnableUpgradeable, ReentrancyGuardUpgradeable, Wallka
         uint256 amount // quantity to buy
     ) external payable nonReentrant {
         // verify that order is for this contract
-        require(
-            order.exchange == address(this),
-            'Sale: Order not for this contract'
-        );
+        require(order.exchange == address(this), 'Sale: Wrong exchange.');
 
         // verify if this order is for a specific address
         if (order.taker != address(0)) {
-            require(msg.sender == order.taker, 'Sale: Order not for this user');
+            require(msg.sender == order.taker, 'Sale: Wrong user.');
         }
 
-        require(amount > 0, 'Sale: amount must be > 0');
-
         require(
-            order.maxPerBuy == 0 || amount <= order.maxPerBuy,
-            'Sale: Amount too big'
+            // amount must be > 0
+            (amount > 0) &&
+                // and amount must be <= at maxPerBuy
+                (order.maxPerBuy == 0 || amount <= order.maxPerBuy),
+            'Sale: Wrong amount.'
         );
 
         // verify order signature
@@ -142,10 +106,13 @@ contract WallkandaSale is OwnableUpgradeable, ReentrancyGuardUpgradeable, Wallka
         // emit buy
         emit Buy(
             order.orderNonce,
-            order.token,
-            order.tokenId,
+            order.outAsset.token,
+            order.outAsset.tokenId,
             amount,
             order.maker,
+            order.inAsset.token,
+            order.inAsset.tokenId,
+            order.inAsset.quantity,
             msg.sender,
             orderTransfers.total,
             orderTransfers.serviceFees
@@ -155,8 +122,8 @@ contract WallkandaSale is OwnableUpgradeable, ReentrancyGuardUpgradeable, Wallka
         if (closed) {
             emit CloseOrder(
                 order.orderNonce,
-                order.token,
-                order.tokenId,
+                order.outAsset.token,
+                order.outAsset.tokenId,
                 order.maker
             );
         }
@@ -165,8 +132,8 @@ contract WallkandaSale is OwnableUpgradeable, ReentrancyGuardUpgradeable, Wallka
     function cancelOrder(
         address token,
         uint256 tokenId,
-        uint256 orderNonce,
-        uint256 quantity
+        uint256 quantity,
+        uint256 orderNonce
     ) public {
         bytes32 orderId =
             _getOrderId(token, tokenId, quantity, msg.sender, orderNonce);
@@ -203,9 +170,9 @@ contract WallkandaSale is OwnableUpgradeable, ReentrancyGuardUpgradeable, Wallka
     ) internal returns (bool) {
         bytes32 orderId =
             _getOrderId(
-                order.token,
-                order.tokenId,
-                order.quantity,
+                order.outAsset.token,
+                order.outAsset.tokenId,
+                order.outAsset.quantity,
                 order.maker,
                 order.orderNonce
             );
@@ -213,7 +180,7 @@ contract WallkandaSale is OwnableUpgradeable, ReentrancyGuardUpgradeable, Wallka
 
         // makes sure order is not already closed
         require(
-            comp <= order.quantity,
+            comp <= order.outAsset.quantity,
             'Sale: Order already closed or quantity too high'
         );
 
@@ -221,10 +188,13 @@ contract WallkandaSale is OwnableUpgradeable, ReentrancyGuardUpgradeable, Wallka
         completed[orderId] = comp;
 
         // returns if order is closed or not
-        return comp == order.quantity;
+        return comp == order.outAsset.quantity;
     }
 
-    function _doTransfers(OrderData memory order, uint256 amount) internal returns (OrderTransfers memory orderTransfers) {
+    function _doTransfers(OrderData memory order, uint256 amount)
+        internal
+        returns (OrderTransfers memory orderTransfers)
+    {
         // get all values into a struct
         // it will help later when we introduce token payments
         orderTransfers = computeValues(order, amount);
@@ -243,8 +213,10 @@ contract WallkandaSale is OwnableUpgradeable, ReentrancyGuardUpgradeable, Wallka
                 beneficiary.transfer(orderTransfers.serviceFees);
             }
 
-            if ( orderTransfers.royaltiesAmount > 0) {
-                payable(orderTransfers.royaltiesRecipient).transfer(orderTransfers.royaltiesAmount);
+            if (orderTransfers.royaltiesAmount > 0) {
+                payable(orderTransfers.royaltiesRecipient).transfer(
+                    orderTransfers.royaltiesAmount
+                );
             }
 
             // send what is left to seller
@@ -274,9 +246,19 @@ contract WallkandaSale is OwnableUpgradeable, ReentrancyGuardUpgradeable, Wallka
         }
     }
 
-    function _getRoyalties(address token, uint256 tokenId, uint256 saleValue) private view returns (address royaltiesRecipient, uint256 royaltiesAmount) {
+    function _getRoyalties(
+        address token,
+        uint256 tokenId,
+        uint256 saleValue
+    )
+        private
+        view
+        returns (address royaltiesRecipient, uint256 royaltiesAmount)
+    {
         IERC2981Royalties withRoyalties = IERC2981Royalties(token);
-        if (withRoyalties.supportsInterface(type(IERC2981Royalties).interfaceId)) {
+        if (
+            withRoyalties.supportsInterface(type(IERC2981Royalties).interfaceId)
+        ) {
             (royaltiesRecipient, royaltiesAmount, ) = withRoyalties.royaltyInfo(
                 tokenId,
                 saleValue,
