@@ -7,7 +7,7 @@
       "hash": "0x68af7f88fe6dee4396a32be395f8b116eaea05ba860e2c6e7549f16241736993",
       "type": null,
       "accessList": null,
-      "blockHash": "0xb85469001624f6994a1bbad3bd985b453b495e0f99d229803c633aed0f7bfa6b",
+      "blockHash": "0x1d7f2af29bc5455a7a691f37870eb8808da5075ad152dc4ef362dc4fdb8e4920",
       "blockNumber": 2,
       "transactionIndex": 0,
       "confirmations": 1,
@@ -269,7 +269,7 @@
           {
             "contract": "WallkandaSaleStorage",
             "label": "transferProxy",
-            "type": "t_contract(ITransferProxy)5934",
+            "type": "t_contract(ITransferProxy)5945",
             "src": "contracts/Sales/WallkandaSaleStorage.sol:38"
           },
           {
@@ -286,7 +286,7 @@
           "t_address_payable": {
             "label": "address payable"
           },
-          "t_contract(ITransferProxy)5934": {
+          "t_contract(ITransferProxy)5945": {
             "label": "contract ITransferProxy"
           },
           "t_mapping(t_bytes32,t_uint256)": {
