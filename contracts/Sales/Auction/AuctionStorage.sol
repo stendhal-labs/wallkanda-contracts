@@ -7,6 +7,8 @@ pragma solidity ^0.8.0;
 /// @dev Creating an auction is made by signing a message off-chain
 /// @dev all calls have therefore to add the auction params and the signature of the auction maker
 abstract contract AuctionStorage {
+    enum TokenType {ETH, ERC20, ERC1155, ERC721}
+
     /// @notice emitted when a new high Bid takes place
     /// @param auctionId bytes32 - the auction Id
     /// @param bidder address - the bidder
@@ -26,8 +28,6 @@ abstract contract AuctionStorage {
         uint256 value,
         address operator
     );
-
-    enum TokenType {ERC1155, ERC721}
 
     struct AuctionParams {
         // a nonce as to not reuse the same auctionId

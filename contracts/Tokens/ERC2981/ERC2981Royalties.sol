@@ -20,7 +20,13 @@ abstract contract ERC2981Royalties is IERC2981Royalties {
     /**
      * @dev See {IERC165-supportsInterface}.
      */
-    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        virtual
+        override
+        returns (bool)
+    {
         return interfaceId == type(IERC2981Royalties).interfaceId;
     }
 
@@ -45,26 +51,18 @@ abstract contract ERC2981Royalties is IERC2981Royalties {
         emit RoyaltiesDefined(id, recipient, value);
     }
 
-    function royaltyInfo(
-        uint256 tokenId,
-        uint256 value,
-        bytes calldata
-    )
+    function royaltyInfo(uint256 tokenId, uint256 value)
         external
         view
         override
-        returns (
-            address receiver,
-            uint256 royaltyAmount,
-            bytes memory royaltyPaymentData
-        )
+        returns (address receiver, uint256 royaltyAmount)
     {
         Royalty memory royalty = _royalties[tokenId];
 
         if (royalty.recipient == address(0)) {
-            return (address(0), 0, '');
+            return (address(0), 0);
         }
 
-        return (royalty.recipient, (value * royalty.value) / 10000, '');
+        return (royalty.recipient, (value * royalty.value) / 10000);
     }
 }

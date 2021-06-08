@@ -1,4 +1,6 @@
 const { expect } = require('chai');
+const { deployments, ethers } = require('hardhat');
+const { constants } = require('ethers');
 
 const toBN = ethers.BigNumber.from;
 
@@ -26,6 +28,8 @@ describe('Exchange 721', function () {
     let values;
     let msgValue;
 
+    const serviceFeeRecipient = process.env.SERVICE_FEE_BENEFICIARY;
+
     beforeEach(async function () {
         [
             owner,
@@ -37,30 +41,24 @@ describe('Exchange 721', function () {
             BUYER,
         ] = await ethers.getSigners();
 
-        // We get the contract to deploy
-        const Exchange = await ethers.getContractFactory('Exchange');
-        const TransferProxy = await ethers.getContractFactory('TransferProxy');
+        await deployments.fixture();
+
+        Exchange = await deployments.get('Exchange');
+        saleContract = await ethers.getContractAt(
+            'Exchange',
+            Exchange.address,
+            owner,
+        );
+
+        TransferProxy = await deployments.get('TransferProxy');
+        transferProxy = await ethers.getContractAt(
+            'TransferProxy',
+            TransferProxy.address,
+            owner,
+        );
 
         // mocks
         const ERC721Dummy = await ethers.getContractFactory('Dummy721');
-
-        // Deploy transferProxy, this will set caller as the Owner
-        transferProxy = await upgrades.deployProxy(TransferProxy, []);
-        await transferProxy.deployed();
-
-        // deploy Exchange contract
-        saleContract = await upgrades.deployProxy(Exchange, [
-            addr3.address,
-            transferProxy.address,
-            250,
-            250,
-        ]);
-
-        await saleContract.deployed();
-
-        // add contract as operators on the TransferProxy
-        await transferProxy.addOperators([saleContract.address]);
-
         erc721 = await ERC721Dummy.connect(OWNER).deploy();
 
         await erc721
@@ -69,17 +67,23 @@ describe('Exchange 721', function () {
 
         // creation order
         order = {
-            tokenType: 1,
             exchange: saleContract.address,
             maker: await OWNER.getAddress(),
-            token: erc721.address,
-            tokenId: ID_ERC721,
-            quantity: 1,
-            orderNonce: 1337,
-            unitPrice: PRICE,
-            taker: '0x0000000000000000000000000000000000000000',
-            buyToken: '0x0000000000000000000000000000000000000000',
+            taker: ethers.constants.AddressZero,
+            outAsset: {
+                tokenType: 3,
+                token: erc721.address,
+                tokenId: ID_ERC721,
+                quantity: 1,
+            },
+            inAsset: {
+                tokenType: 0,
+                token: ethers.constants.AddressZero,
+                tokenId: 0,
+                quantity: PRICE,
+            },
             maxPerBuy: 0,
+            orderNonce: 1337,
         };
 
         signature = await signOrder(order);
@@ -151,7 +155,7 @@ describe('Exchange 721', function () {
             .to.emit(saleContract, 'CloseOrder');
 
         // NEW NFT OWNER.address SHOULD BE BUYER.address
-        const ownerOf = await erc721.ownerOf(order.tokenId);
+        const ownerOf = await erc721.ownerOf(order.outAsset.tokenId);
         expect(ownerOf.toString()).to.be.equal(
             BUYER.address,
             "ERC721 didn't go to BUYER.address",
@@ -168,8 +172,13 @@ describe('Exchange 721', function () {
             OWNER.provider,
         );
 
+        const serviceFeeRecipientAccount = new ethers.VoidSigner(
+            serviceFeeRecipient,
+            OWNER.provider,
+        );
+
         await expect(tx).to.changeEtherBalances(
-            [OWNER, BUYER, addr3, royaltiesRecipient],
+            [OWNER, BUYER, serviceFeeRecipientAccount, royaltiesRecipient],
             [
                 values.sellerEndValue,
                 msgValue.mul(toBN(-1)),

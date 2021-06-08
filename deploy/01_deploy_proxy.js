@@ -4,13 +4,20 @@ module.exports = async ({ getNamedAccounts, deployments, ethers }) => {
 
     const { deployer } = await getNamedAccounts();
 
-    await deploy('TransferProxy', {
-        from: deployer,
-        proxy: {
-            proxyContract: 'OpenZeppelinTransparentProxy',
-            methodName: 'initialize',
-        },
-        log: true,
-    });
+    let TransferProxy;
+    try {
+        TransferProxy = await deployments.get('TransferProxy');
+    } catch (e) {}
+
+    if (!TransferProxy) {
+        await deploy('TransferProxy', {
+            from: deployer,
+            proxy: {
+                proxyContract: 'OpenZeppelinTransparentProxy',
+                methodName: 'initialize',
+            },
+            log: true,
+        });
+    }
 };
 module.exports.tags = ['TransferProxy'];

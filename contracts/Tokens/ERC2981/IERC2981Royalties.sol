@@ -19,22 +19,12 @@ interface IERC2981Royalties is IERC165Upgradeable {
      *
      * @param tokenId  The identifier for an NFT
      * @param value Purchase price of NFT
-     * @param data Additional data for royalty info. Not to be used as part of EIP-2981.
      *
      * @return receiver The royalty recipient address
      * @return royaltyAmount Amount to be paid to the royalty recipient
-     * @return royaltyPaymentData Additional data for royalty info. Not to be used as part of EIP-2981.
      */
-    function royaltyInfo(
-        uint256 tokenId,
-        uint256 value,
-        bytes calldata data
-    )
+    function royaltyInfo(uint256 tokenId, uint256 value)
         external
         view
-        returns (
-            address receiver,
-            uint256 royaltyAmount,
-            bytes memory royaltyPaymentData
-        );
+        returns (address receiver, uint256 royaltyAmount);
 }

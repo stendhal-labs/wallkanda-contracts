@@ -7,7 +7,7 @@
       "hash": "0x68af7f88fe6dee4396a32be395f8b116eaea05ba860e2c6e7549f16241736993",
       "type": null,
       "accessList": null,
-      "blockHash": "0x1d7f2af29bc5455a7a691f37870eb8808da5075ad152dc4ef362dc4fdb8e4920",
+      "blockHash": "0xc10597675dc91da302c00d41bef3692238e54b8673f5de9370c737e698573ce7",
       "blockNumber": 2,
       "transactionIndex": 0,
       "confirmations": 1,
@@ -35,16 +35,6 @@
     }
   },
   "proxies": [
-    {
-      "address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-      "txHash": "0x8c337ab878bb88baddc169b2b1b3af2c3b9aaf6c298abc8a68cbcc575fc301f9",
-      "kind": "transparent"
-    },
-    {
-      "address": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
-      "txHash": "0x1f7f7d1f2a53fab5bfe33ef98a4efb599dec35f85a9bcc6c1a1f82b33c7b3ef7",
-      "kind": "transparent"
-    },
     {
       "address": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
       "txHash": "0xcf0f3c9fa34955dc54656a9effe80cf74b817baece2ac1554516d480f12767a8",
@@ -134,6 +124,16 @@
       "address": "0xc3e53F4d16Ae77Db1c982e75a937B9f60FE63690",
       "txHash": "0x8efafe430337e2a7d18f5169961a8a365130f8983ad7562816620c67c5c5cae6",
       "kind": "transparent"
+    },
+    {
+      "address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+      "txHash": "0x8c337ab878bb88baddc169b2b1b3af2c3b9aaf6c298abc8a68cbcc575fc301f9",
+      "kind": "transparent"
+    },
+    {
+      "address": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+      "txHash": "0xc9bf396631a6cbe7e7bdd2731dae1d699d1d95f08d003922fa92e850542fc561",
+      "kind": "transparent"
     }
   ],
   "impls": {
@@ -201,9 +201,9 @@
         }
       }
     },
-    "e83d4b10af3bdd976f50b009553f05687ed0455bc6f4eaef9173b43e5dfa8e3e": {
+    "174aa1c48b2f2782e7f9500c200dc69d76d1d0db4ce119d1fcce8dbe5dfbe629": {
       "address": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
-      "txHash": "0xf782847a58f7ea63b0bb1369a462dc8073f7375e723a1ea2412a53097cf14939",
+      "txHash": "0x2c523a71b0a330bc3247816d24763ecbf0c50a8119eabfe9ae5008b64a84bde0",
       "layout": {
         "storage": [
           {
@@ -217,6 +217,18 @@
             "label": "_initializing",
             "type": "t_bool",
             "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:28"
+          },
+          {
+            "contract": "ReentrancyGuardUpgradeable",
+            "label": "_status",
+            "type": "t_uint256",
+            "src": "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol:37"
+          },
+          {
+            "contract": "ReentrancyGuardUpgradeable",
+            "label": "__gap",
+            "type": "t_array(t_uint256)49_storage",
+            "src": "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol:67"
           },
           {
             "contract": "ContextUpgradeable",
@@ -237,49 +249,43 @@
             "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:74"
           },
           {
-            "contract": "ReentrancyGuardUpgradeable",
-            "label": "_status",
-            "type": "t_uint256",
-            "src": "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol:37"
-          },
-          {
-            "contract": "ReentrancyGuardUpgradeable",
-            "label": "__gap",
-            "type": "t_array(t_uint256)49_storage",
-            "src": "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol:67"
-          },
-          {
-            "contract": "WallkandaSaleStorage",
+            "contract": "BaseExchange",
             "label": "sellerServiceFee",
             "type": "t_uint256",
-            "src": "contracts/Sales/WallkandaSaleStorage.sol:34"
+            "src": "contracts/Sales/BaseExchange.sol:11"
           },
           {
-            "contract": "WallkandaSaleStorage",
+            "contract": "BaseExchange",
             "label": "buyerServiceFee",
             "type": "t_uint256",
-            "src": "contracts/Sales/WallkandaSaleStorage.sol:35"
+            "src": "contracts/Sales/BaseExchange.sol:12"
           },
           {
-            "contract": "WallkandaSaleStorage",
+            "contract": "BaseExchange",
             "label": "beneficiary",
             "type": "t_address_payable",
-            "src": "contracts/Sales/WallkandaSaleStorage.sol:37"
+            "src": "contracts/Sales/BaseExchange.sol:14"
           },
           {
-            "contract": "WallkandaSaleStorage",
+            "contract": "BaseExchange",
             "label": "transferProxy",
             "type": "t_contract(ITransferProxy)5945",
-            "src": "contracts/Sales/WallkandaSaleStorage.sol:38"
+            "src": "contracts/Sales/BaseExchange.sol:15"
           },
           {
-            "contract": "WallkandaSaleStorage",
+            "contract": "ExchangeStorage",
             "label": "completed",
             "type": "t_mapping(t_bytes32,t_uint256)",
-            "src": "contracts/Sales/WallkandaSaleStorage.sol:41"
+            "src": "contracts/Sales/ExchangeStorage.sol:37"
           }
         ],
         "types": {
+          "t_mapping(t_bytes32,t_uint256)": {
+            "label": "mapping(bytes32 => uint256)"
+          },
+          "t_bytes32": {
+            "label": "bytes32"
+          },
           "t_uint256": {
             "label": "uint256"
           },
@@ -289,17 +295,11 @@
           "t_contract(ITransferProxy)5945": {
             "label": "contract ITransferProxy"
           },
-          "t_mapping(t_bytes32,t_uint256)": {
-            "label": "mapping(bytes32 => uint256)"
-          },
-          "t_bytes32": {
-            "label": "bytes32"
+          "t_address": {
+            "label": "address"
           },
           "t_array(t_uint256)49_storage": {
             "label": "uint256[49]"
-          },
-          "t_address": {
-            "label": "address"
           },
           "t_array(t_uint256)50_storage": {
             "label": "uint256[50]"

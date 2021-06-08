@@ -4,26 +4,25 @@ pragma solidity ^0.8.0;
 import '@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol';
 
 import '../Proxys/Transfer/ITransferProxy.sol';
-import '../Tokens/ERC2981/IERC2981Royalties.sol';
 
 import './BaseExchange.sol';
 import './ExchangeStorage.sol';
 
-contract Exchange is ReentrancyGuardUpgradeable, BaseExchange, ExchangeStorage {
+contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
     function initialize(
-        address payable _beneficiary,
-        address _transferProxy,
-        uint256 _buyerServiceFee,
-        uint256 _sellerServiceFee
+        address payable beneficiary_,
+        address transferProxy_,
+        uint256 buyerServiceFee_,
+        uint256 sellerServiceFee_
     ) public initializer {
         __BaseExchange_init(
-            _beneficiary,
-            _transferProxy,
-            _buyerServiceFee,
-            _sellerServiceFee
+            beneficiary_,
+            transferProxy_,
+            buyerServiceFee_,
+            sellerServiceFee_
         );
 
-        __ReentrancyGuard_init();
+        __ReentrancyGuard_init_unchained();
     }
 
     function prepareOrderMessage(OrderData memory order)
@@ -45,32 +44,13 @@ contract Exchange is ReentrancyGuardUpgradeable, BaseExchange, ExchangeStorage {
         view
         returns (OrderTransfers memory orderTransfers)
     {
-        orderTransfers.total = order.unitPrice * amount;
-        uint256 buyerFee = (orderTransfers.total * buyerServiceFee) / 10000;
-        uint256 sellerFee = (orderTransfers.total * sellerServiceFee) / 10000;
-
-        // total of transaction value (price + buyerFee)
-        orderTransfers.totalTransaction = orderTransfers.total + buyerFee;
-        // seller end value: price - sellerFee
-        orderTransfers.sellerEndValue = orderTransfers.total - sellerFee;
-        // all fees
-        orderTransfers.serviceFees = sellerFee + buyerFee;
-
-        (address royaltiesRecipient, uint256 royaltiesAmount) =
-            _getRoyalties(order.token, order.tokenId, orderTransfers.total);
-
-        // if there are royalties
-        if (
-            royaltiesAmount > 0 &&
-            royaltiesAmount <= orderTransfers.sellerEndValue
-        ) {
-            orderTransfers.royaltiesRecipient = royaltiesRecipient;
-            orderTransfers.royaltiesAmount = royaltiesAmount;
-            // substract royalties to end value
-            orderTransfers.sellerEndValue =
-                orderTransfers.sellerEndValue -
-                royaltiesAmount;
-        }
+        return
+            _computeValues(
+                order.inAsset.quantity,
+                order.outAsset.token,
+                order.outAsset.tokenId,
+                amount
+            );
     }
 
     function buy(
@@ -202,7 +182,8 @@ contract Exchange is ReentrancyGuardUpgradeable, BaseExchange, ExchangeStorage {
         // this here is because we're not using tokens
         // verify that msg.value is right
         require(
-            msg.value == orderTransfers.totalTransaction, // total = (unitPrice * amount) + buyerFee
+            // total = (unitPrice * amount) + buyerFee
+            msg.value == orderTransfers.totalTransaction,
             'Sale: Sent value is incorrect'
         );
 
@@ -226,42 +207,21 @@ contract Exchange is ReentrancyGuardUpgradeable, BaseExchange, ExchangeStorage {
         }
 
         // send token to buyer
-        if (order.tokenType == TokenType.ERC1155) {
+        if (order.outAsset.tokenType == TokenType.ERC1155) {
             transferProxy.erc1155SafeTransferFrom(
-                order.token,
+                order.outAsset.token,
                 order.maker,
                 msg.sender,
-                order.tokenId,
+                order.outAsset.tokenId,
                 amount,
                 ''
             );
         } else {
             transferProxy.erc721SafeTransferFrom(
-                order.token,
+                order.outAsset.token,
                 order.maker,
                 msg.sender,
-                order.tokenId,
-                ''
-            );
-        }
-    }
-
-    function _getRoyalties(
-        address token,
-        uint256 tokenId,
-        uint256 saleValue
-    )
-        private
-        view
-        returns (address royaltiesRecipient, uint256 royaltiesAmount)
-    {
-        IERC2981Royalties withRoyalties = IERC2981Royalties(token);
-        if (
-            withRoyalties.supportsInterface(type(IERC2981Royalties).interfaceId)
-        ) {
-            (royaltiesRecipient, royaltiesAmount, ) = withRoyalties.royaltyInfo(
-                tokenId,
-                saleValue,
+                order.outAsset.tokenId,
                 ''
             );
         }

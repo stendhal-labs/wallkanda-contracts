@@ -5,15 +5,29 @@ import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
 
 import '../Proxys/Transfer/ITransferProxy.sol';
 import '../Security/MessageSigning.sol';
+import '../Tokens/ERC2981/IERC2981Royalties.sol';
 
 contract BaseExchange is OwnableUpgradeable, MessageSigning {
-    enum TokenType {ERC1155, ERC721}
-
     uint256 public sellerServiceFee;
     uint256 public buyerServiceFee;
 
     address payable public beneficiary;
     ITransferProxy public transferProxy;
+
+    struct OrderTransfers {
+        /* total order value */
+        uint256 total;
+        /* total value for seller (total - sellerServiceFees - royalties) */
+        uint256 sellerEndValue;
+        /* total transaction */
+        uint256 totalTransaction;
+        /* all service fees */
+        uint256 serviceFees;
+        /* royalties amount to transfer */
+        uint256 royaltiesAmount;
+        /* royalties recipient */
+        address royaltiesRecipient;
+    }
 
     function __BaseExchange_init(
         address payable _beneficiary,
@@ -21,7 +35,7 @@ contract BaseExchange is OwnableUpgradeable, MessageSigning {
         uint256 _buyerServiceFee,
         uint256 _sellerServiceFee
     ) internal initializer {
-        __OwnableOperatorControl_init();
+        __Ownable_init();
 
         setBeneficiary(_beneficiary);
         setTransferProxy(_transferProxy);
@@ -29,21 +43,88 @@ contract BaseExchange is OwnableUpgradeable, MessageSigning {
         setSellerServiceFee(_sellerServiceFee);
     }
 
-    function setBuyerServiceFee(uint256 _buyerServiceFee) public onlyOwner {
-        buyerServiceFee = _buyerServiceFee;
+    function setBuyerServiceFee(uint256 buyerServiceFee_)
+        public
+        virtual
+        onlyOwner
+    {
+        buyerServiceFee = buyerServiceFee_;
     }
 
-    function setSellerServiceFee(uint256 _sellerServiceFee) public onlyOwner {
-        sellerServiceFee = _sellerServiceFee;
+    function setSellerServiceFee(uint256 sellerServiceFee_)
+        public
+        virtual
+        onlyOwner
+    {
+        sellerServiceFee = sellerServiceFee_;
     }
 
-    function setTransferProxy(address _transferProxy) public onlyOwner {
-        require(_transferProxy != address(0));
-        transferProxy = ITransferProxy(_transferProxy);
+    function setTransferProxy(address transferProxy_) public virtual onlyOwner {
+        require(transferProxy_ != address(0));
+        transferProxy = ITransferProxy(transferProxy_);
     }
 
-    function setBeneficiary(address payable _beneficiary) public onlyOwner {
-        require(_beneficiary != address(0));
-        beneficiary = _beneficiary;
+    function setBeneficiary(address payable beneficiary_)
+        public
+        virtual
+        onlyOwner
+    {
+        require(beneficiary_ != address(0));
+        beneficiary = beneficiary_;
+    }
+
+    function _computeValues(
+        uint256 unitPrice,
+        address token,
+        uint256 tokenId,
+        uint256 amount
+    ) internal view returns (OrderTransfers memory orderTransfers) {
+        orderTransfers.total = unitPrice * amount;
+        uint256 buyerFee = (orderTransfers.total * buyerServiceFee) / 10000;
+        uint256 sellerFee = (orderTransfers.total * sellerServiceFee) / 10000;
+
+        // total of transaction value (price + buyerFee)
+        orderTransfers.totalTransaction = orderTransfers.total + buyerFee;
+        // seller end value: price - sellerFee
+        orderTransfers.sellerEndValue = orderTransfers.total - sellerFee;
+        // all fees
+        orderTransfers.serviceFees = sellerFee + buyerFee;
+
+        (address royaltiesRecipient, uint256 royaltiesAmount) =
+            _getRoyalties(token, tokenId, orderTransfers.total);
+
+        // if there are royalties
+        if (
+            royaltiesAmount > 0 &&
+            royaltiesAmount <= orderTransfers.sellerEndValue
+        ) {
+            orderTransfers.royaltiesRecipient = royaltiesRecipient;
+            orderTransfers.royaltiesAmount = royaltiesAmount;
+            // substract royalties to end value
+            orderTransfers.sellerEndValue =
+                orderTransfers.sellerEndValue -
+                royaltiesAmount;
+        }
+    }
+
+    function _getRoyalties(
+        address token,
+        uint256 tokenId,
+        uint256 saleValue
+    )
+        internal
+        view
+        virtual
+        returns (address royaltiesRecipient, uint256 royaltiesAmount)
+    {
+        IERC2981Royalties withRoyalties = IERC2981Royalties(token);
+        if (
+            withRoyalties.supportsInterface(type(IERC2981Royalties).interfaceId)
+        ) {
+            (royaltiesRecipient, royaltiesAmount) = withRoyalties.royaltyInfo(
+                tokenId,
+                saleValue
+            );
+        }
     }
 }

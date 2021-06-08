@@ -11,10 +11,10 @@ import './AuctionStorage.sol';
 /// @dev most calls have therefore to add the auction params and the signature of the auction maker
 contract Auction is BaseExchange, AuctionStorage {
     /// @notice Upgradeable contracts constructor
-    /// @dev Explain to a developer any extra details
-    /// @param Documents a parameter just like in doxygen (must be followed by parameter name)
-    /// @return Documents the return variables of a contract’s function state variable
-    /// @inheritdoc	Copies all missing tags from the base function (must be followed by the contract name)
+    /// @param _beneficiary - the address that gets the service fees
+    /// @param _transferProxy - the contract used to transfer the NFTs (and others)
+    /// @param _buyerServiceFee -  amount of fees on buyer
+    /// @param _sellerServiceFee - amount of fees on seller
     function initialize(
         address payable _beneficiary,
         address _transferProxy,
@@ -29,14 +29,27 @@ contract Auction is BaseExchange, AuctionStorage {
         );
     }
 
+    /// @notice Allows to set service fees for buyer
+    /// @dev on auctions, we can not add a buyerFee since the price is already escrowed. So Buyer fee need to be 0
+    /// @param buyerServiceFee_ the buyer fee - here must be 0
+    function setBuyerServiceFee(uint256 buyerServiceFee_)
+        public
+        virtual
+        override
+        onlyOwner
+    {
+        require(buyerServiceFee_ == 0, "Can't have buyer fees on auctions");
+        buyerServiceFee = buyerServiceFee_;
+    }
+
     /// @notice Place a bid on an auction
-    /// @param AuctionParams auctionParams - the parameters defining the auction
-    /// @param Signature signature - the signature by the auction creator
+    /// @param auctionParams - the parameters defining the auction
+    /// @param signature - the signature by the auction creator
     function placeBid(
         AuctionParams memory auctionParams,
         Signature calldata signature,
         uint256 amount
-    ) external {
+    ) external payable {
         bytes32 auctionId = verifyAuctionSignature(auctionParams, signature);
         AuctionDetails storage auction = auctions[auctionId];
 
@@ -44,7 +57,7 @@ contract Auction is BaseExchange, AuctionStorage {
         require(auction.closed == false, 'Auction: auction closed');
 
         // verify is not timed OR is not out of time
-        if (auctionParams.duration) {
+        if (auctionParams.duration > 0) {
             // if the counter is already on in the contract
             if (auction.endDate > 0) {
                 require(block.timestamp < auction.endDate, 'Auction: ended');
@@ -88,7 +101,7 @@ contract Auction is BaseExchange, AuctionStorage {
         auction.highestBidder = msg.sender;
 
         // if it's a timed auction
-        if (auctionParams.duration) {
+        if (auctionParams.duration > 0) {
             // the endDate still not set so we might need to do that
             if (auction.endDate == 0) {
                 if (auctionParams.startDate > 0) {
@@ -96,13 +109,16 @@ contract Auction is BaseExchange, AuctionStorage {
                         auctionParams.startDate +
                         auctionParams.duration;
                 } else if (newBid >= auctionParams.amountTrigger) {
-                    auction.endDate = block.timestamp + duration;
+                    auction.endDate = block.timestamp + auctionParams.duration;
                 }
             }
 
             // if we have an endDate and NOW is less than 10 minutes before the end of the auction
             // add 10 minutes
-            if (auction.endDate > 0 && auction.endDate - now < 10 * 60) {
+            if (
+                auction.endDate > 0 &&
+                auction.endDate - block.timestamp < 10 * 60
+            ) {
                 auction.endDate = block.timestamp + 10 * 60;
             }
         }
@@ -111,8 +127,8 @@ contract Auction is BaseExchange, AuctionStorage {
     }
 
     /// @notice Accepts the bid from a given bidder
-    /// @param AuctionParams auctionParams - the parameters defining the auction
-    /// @return bytes32 the identifier of the auction and also the message signed by the maker
+    /// @param auctionParams - the parameters defining the auction
+    /// @param bidder - the address of the bidder we accept bid from
     function acceptBid(AuctionParams memory auctionParams, address bidder)
         public
     {
@@ -150,7 +166,7 @@ contract Auction is BaseExchange, AuctionStorage {
     /// @dev We do not verify signature here, because any previous action creating a bid will alredy verify it
     /// @dev So a long as it's not closed and has a highestBidder, we can consider it's valid
     /// @notice This is use so  they don't have to wait for the auctioner to do an action
-    /// @param AuctionParams auctionParams - the parameters defining the auction
+    /// @param auctionParams - the parameters defining the auction
     function claimResult(AuctionParams memory auctionParams) external {
         bytes32 auctionId = prepareAuction(auctionParams);
         AuctionDetails storage auction = auctions[auctionId];
@@ -158,7 +174,7 @@ contract Auction is BaseExchange, AuctionStorage {
         // verify that auction wasn't already closed
         require(auction.closed == false, 'Auction: already closed');
 
-        // verify that it is a timed auction AND that it is now finished
+        // verify that it is a timed auction AND that it is block.timestamp finished
         require(
             auction.endDate > 0 && block.timestamp > auction.endDate,
             'Auction: auction not ended'
@@ -174,7 +190,7 @@ contract Auction is BaseExchange, AuctionStorage {
     }
 
     /// @notice Cancel an auction
-    /// @param AuctionParams auctionParams - the parameters defining the auction
+    /// @param auctionParams - the parameters defining the auction
     function cancelAuction(AuctionParams memory auctionParams) public {
         require(
             auctionParams.maker == msg.sender,
@@ -192,13 +208,13 @@ contract Auction is BaseExchange, AuctionStorage {
         require(auction.closed == false, 'Auction: already closed');
 
         auction.closed = true;
-        emit CancelAuction(auctionId, msg.sender);
+        emit CancelAuction(auctionId);
     }
 
     /// @notice Allows a user to cancel their bid on an auction, only if it's not the highest bid
     /// @dev Must be provided auctionParams and creator signature
-    /// @param AuctionParams auctionParams - the parameters defining the auction
-    /// @param Signature signature - the signature by the auction creator
+    /// @param auctionParams - the parameters defining the auction
+    /// @param signature - the signature by the auction creator
     function cancelBid(
         AuctionParams memory auctionParams,
         Signature calldata signature
@@ -217,14 +233,14 @@ contract Auction is BaseExchange, AuctionStorage {
 
         // set to 0
         delete auctionsBids[auctionId][msg.sender];
-        msg.sender.transfer(value);
+        payable(msg.sender).transfer(value);
         emit CancelBid(auctionId, msg.sender, value);
     }
 
     /// @notice Hashes the auction parameters to create an unique identifier from it
-    /// @param AuctionParams auctionParams - the parameters defining the auction
+    /// @param auctionParams - the parameters defining the auction
     /// @return bytes32 the identifier of the auction and also the message signed by the maker
-    function prepareAuction(AuctionParams auctionParams)
+    function prepareAuction(AuctionParams memory auctionParams)
         public
         pure
         returns (bytes32)
@@ -233,9 +249,9 @@ contract Auction is BaseExchange, AuctionStorage {
     }
 
     /// @notice Verifies an auction signature
-    /// @param AuctionParams auctionParams - the parameters defining the auction
-    /// @param Signature signature - the signature by the auction creator
-    /// @return bytes32 auctionId - the identifier of the auction and also the message signed by the maker
+    /// @param auctionParams - the parameters defining the auction
+    /// @param signature - the signature by the auction creator
+    /// @return auctionId - the identifier of the auction and also the message signed by the maker
     function verifyAuctionSignature(
         AuctionParams memory auctionParams,
         Signature calldata signature
@@ -249,11 +265,29 @@ contract Auction is BaseExchange, AuctionStorage {
         );
     }
 
+    /// @notice compute the values (total tx, service fees, royalties, ...) according to the current exchange
+    /// @dev orderTransfers will contain all values needed to transfer dues to royaltiesRecipient and platform
+    /// @param auctionParams the auction parameters
+    /// @return orderTransfers an object with all needed values
+    function computeValues(AuctionParams memory auctionParams)
+        public
+        view
+        returns (OrderTransfers memory orderTransfers)
+    {
+        return
+            _computeValues(
+                auctionParams.quantity,
+                auctionParams.token,
+                auctionParams.tokenId,
+                1
+            );
+    }
+
     /// @notice Will finish an auction by sending token to bidder and bid to auctionParams.maker
-    /// @param bytes32 auctionId - the auction identifier
-    /// @param AuctionDetails auction - the auction in storage
-    /// @param AuctionParams auctionParams - the parameters defining the auction
-    /// @param address bidder - the bidder that was chosen
+    /// @param auctionId - the auction identifier
+    /// @param auction - the auction in storage
+    /// @param auctionParams - the parameters defining the auction
+    /// @param bidder - the bidder that was chosen
     function _closeAuction(
         bytes32 auctionId,
         AuctionDetails storage auction,
@@ -266,11 +300,22 @@ contract Auction is BaseExchange, AuctionStorage {
         uint256 value = auctionsBids[auctionId][bidder];
         delete auctionsBids[auctionId][bidder];
 
-        uint256 rest = value;
-        // calculate platform fees
+        OrderTransfers memory orderTransfers = computeValues(auctionParams);
 
-        // transfer bid amount to msg sender
-        payable(auctionParams.maker).transfer(value);
+        // transfer platform fees
+        if (orderTransfers.serviceFees > 0) {
+            beneficiary.transfer(orderTransfers.serviceFees);
+        }
+
+        // transfer royalties
+        if (orderTransfers.royaltiesAmount > 0) {
+            payable(orderTransfers.royaltiesRecipient).transfer(
+                orderTransfers.royaltiesAmount
+            );
+        }
+
+        // transfer end value to msg sender
+        payable(auctionParams.maker).transfer(orderTransfers.sellerEndValue);
 
         // transfer NFT to bidder
         if (auctionParams.tokenType == TokenType.ERC1155) {
