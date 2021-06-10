@@ -7,20 +7,23 @@ describe('EditionsRegistry - Minting', async () => {
     let DEPLOYER;
     let MINTER;
     let owner;
-    let EditionsRegistry;
     const BYTES = ethers.utils.toUtf8Bytes('012345-133456');
 
     before(async function () {
         [DEPLOYER, MINTER, owner] = await ethers.getSigners();
         process.env.MINTER_ADDRESS = await MINTER.getAddress();
 
-        await deployments.fixture();
-
-        EditionsRegistry = await deployments.get('EditionsRegistry');
-        contract = await ethers.getContractAt(
+        // mocks
+        const EditionsRegistry = await ethers.getContractFactory(
             'EditionsRegistry',
-            EditionsRegistry.address,
-            DEPLOYER,
+        );
+
+        contract = await EditionsRegistry.connect(DEPLOYER).deploy();
+        await contract.initialize(
+            process.env.EDITIONS_URI,
+            process.env.MINTER_ADDRESS,
+            process.env.CONTRACT_URI,
+            process.env.OPENSEA_REGISTRY,
         );
     });
 

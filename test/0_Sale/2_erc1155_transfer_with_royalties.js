@@ -32,16 +32,8 @@ describe('Exchange ERC1155 With royalties', function () {
     const serviceFeeRecipient = process.env.SERVICE_FEE_BENEFICIARY;
 
     beforeEach(async function () {
-        [
-            owner,
-            addr1,
-            addr2,
-            addr3,
-            addr4,
-            OWNER,
-            BUYER,
-            ROYALTIES_RECIPIENT,
-        ] = await ethers.getSigners();
+        [owner, addr1, addr2, addr3, addr4, OWNER, BUYER, ROYALTIES_RECIPIENT] =
+            await ethers.getSigners();
 
         await deployments.fixture();
 
