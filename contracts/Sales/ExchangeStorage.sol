@@ -10,7 +10,12 @@ import '../Proxys/Transfer/ITransferProxy.sol';
 import '../Tokens/ERC2981/IERC2981Royalties.sol';
 
 contract ExchangeStorage {
-    enum TokenType {ETH, ERC20, ERC1155, ERC721}
+    enum TokenType {
+        ETH,
+        ERC20,
+        ERC1155,
+        ERC721
+    }
 
     event Buy(
         uint256 indexed orderNonce,
@@ -59,7 +64,31 @@ contract ExchangeStorage {
         uint256 maxPerBuy;
         /* OrderNonce so we can have different order for the same tokenId */
         uint256 orderNonce;
+        /* expiration date for this order - usually 1 month | 0 means never expires */
+        uint256 expiration;
     }
+
+    struct OrderMeta {
+        /* buyer */
+        address buyer;
+        /* seller fee for the sale */
+        uint256 sellerFee;
+        /* buyer fee for the sale */
+        uint256 buyerFee;
+        /* expiration for this sale - usually 24h | 0 means never expires */
+        uint256 expiration;
+        /* Order Meta nonce so it can only be used once */
+        uint256 nonce;
+    }
+
+    // signer used to sign "buys"
+    // this allows to have buyer and sellerFee per tx and not global
+    // this also allows to invalidate orders without needed them to be canceled
+    // in the contract since a buy can't be done without being signed
+    address public exchangeSigner;
+
+    // To register saleMeta that were already used
+    mapping(bytes32 => bool) public usedSaleMeta;
 
     // orderId => completed amount
     mapping(bytes32 => uint256) public completed;

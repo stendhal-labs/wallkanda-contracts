@@ -4,47 +4,33 @@ module.exports = async ({ getNamedAccounts, deployments, ethers }) => {
 
     const { deployer } = await getNamedAccounts();
 
-    // verify if we already have a version deployed.
-    // if not, we do a initialize deployment
-    let Editions;
-
-    try {
-        Editions = await deployments.get('EditionsRegistry');
-    } catch (e) {}
-
-    if (!Editions || !Editions.address) {
-        const deployResult = await deploy('EditionsRegistry', {
-            from: deployer,
-            proxy: {
-                proxyContract: 'OpenZeppelinTransparentProxy',
-                methodName: 'initialize',
+    const deployResult = await deploy('EditionsRegistry', {
+        from: deployer,
+        proxy: {
+            proxyContract: 'OpenZeppelinTransparentProxy',
+            execute: {
+                init: {
+                    methodName: 'initialize',
+                    args: [
+                        process.env.EDITIONS_URI,
+                        process.env.MINTER_ADDRESS,
+                        process.env.CONTRACT_URI,
+                        process.env.OPENSEA_REGISTRY,
+                    ],
+                },
             },
-            args: [
-                process.env.EDITIONS_URI,
-                process.env.MINTER_ADDRESS,
-                process.env.CONTRACT_URI,
-                process.env.OPENSEA_REGISTRY,
-            ],
-            log: true,
-        });
+        },
+        log: true,
+    });
 
-        await execute(
-            'EditionsRegistry',
-            { from: deployer, log: true },
-            'setBaseURI',
-            process.env.EDITIONS_URI.replace(
-                '{contract}',
-                deployResult.address.toLowerCase(),
-            ),
-        );
-    } else {
-        const deployResult = await deploy('EditionsRegistry', {
-            from: deployer,
-            proxy: {
-                proxyContract: 'OpenZeppelinTransparentProxy',
-            },
-            log: true,
-        });
-    }
+    await execute(
+        'EditionsRegistry',
+        { from: deployer, log: true },
+        'setBaseURI',
+        process.env.EDITIONS_URI.replace(
+            '{contract}',
+            deployResult.address.toLowerCase(),
+        ),
+    );
 };
 module.exports.tags = ['EditionsRegistry'];

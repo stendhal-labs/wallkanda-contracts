@@ -12,17 +12,20 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
     function initialize(
         address payable beneficiary_,
         address transferProxy_,
-        uint256 buyerServiceFee_,
-        uint256 sellerServiceFee_
+        address exchangeSigner_
     ) public initializer {
-        __BaseExchange_init(
-            beneficiary_,
-            transferProxy_,
-            buyerServiceFee_,
-            sellerServiceFee_
-        );
+        __BaseExchange_init(beneficiary_, transferProxy_);
 
         __ReentrancyGuard_init_unchained();
+
+        setExchangeSigner(exchangeSigner_);
+    }
+
+    /// @dev Allows owner to set the address used to sign the sales Metadata
+    /// @param exchangeSigner_ address of the signer
+    function setExchangeSigner(address exchangeSigner_) public onlyOwner {
+        require(exchangeSigner_ != address(0), 'Exchange signer must be valid');
+        exchangeSigner = exchangeSigner_;
     }
 
     function prepareOrderMessage(OrderData memory order)
@@ -33,30 +36,41 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
         return keccak256(abi.encode(order));
     }
 
+    function prepareOrderMetaMessage(
+        Signature memory orderSig,
+        OrderMeta memory saleMeta
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encode(orderSig, saleMeta));
+    }
+
     /**
      * @dev this function computes all the values that we need for the exchange.
      * this can be called off-chain before buying so all values can be computed easily
      *
      * It will also help when we introduce tokens for payment
      */
-    function computeValues(OrderData memory order, uint256 amount)
-        public
-        view
-        returns (OrderTransfers memory orderTransfers)
-    {
+    function computeValues(
+        OrderData memory order,
+        uint256 amount,
+        OrderMeta memory saleMeta
+    ) public view returns (OrderTransfers memory orderTransfers) {
         return
             _computeValues(
                 order.inAsset.quantity,
                 order.outAsset.token,
                 order.outAsset.tokenId,
-                amount
+                amount,
+                saleMeta.buyerFee,
+                saleMeta.sellerFee
             );
     }
 
     function buy(
         OrderData memory order,
-        Signature calldata sig,
-        uint256 amount // quantity to buy
+        Signature memory sig,
+        uint256 amount, // quantity to buy
+        OrderMeta memory saleMeta,
+        Signature memory saleMetaSignature
     ) external payable nonReentrant {
         // verify that order is for this contract
         require(order.exchange == address(this), 'Sale: Wrong exchange.');
@@ -74,6 +88,9 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
             'Sale: Wrong amount.'
         );
 
+        // verify exchange meta for buy
+        _verifyOrderMeta(sig, saleMeta, saleMetaSignature);
+
         // verify order signature
         _validateOrderSig(order, sig);
 
@@ -81,7 +98,11 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
         bool closed = _verifyOpenAndModifyState(order, amount);
 
         // transfer everything
-        OrderTransfers memory orderTransfers = _doTransfers(order, amount);
+        OrderTransfers memory orderTransfers = _doTransfers(
+            order,
+            amount,
+            saleMeta
+        );
 
         // emit buy
         emit Buy(
@@ -115,13 +136,18 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
         uint256 quantity,
         uint256 orderNonce
     ) public {
-        bytes32 orderId =
-            _getOrderId(token, tokenId, quantity, msg.sender, orderNonce);
+        bytes32 orderId = _getOrderId(
+            token,
+            tokenId,
+            quantity,
+            msg.sender,
+            orderNonce
+        );
         completed[orderId] = quantity;
         emit CloseOrder(orderNonce, token, tokenId, msg.sender);
     }
 
-    function _validateOrderSig(OrderData memory order, Signature calldata sig)
+    function _validateOrderSig(OrderData memory order, Signature memory sig)
         public
         pure
     {
@@ -148,14 +174,13 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
         OrderData memory order,
         uint256 buyingAmount
     ) internal returns (bool) {
-        bytes32 orderId =
-            _getOrderId(
-                order.outAsset.token,
-                order.outAsset.tokenId,
-                order.outAsset.quantity,
-                order.maker,
-                order.orderNonce
-            );
+        bytes32 orderId = _getOrderId(
+            order.outAsset.token,
+            order.outAsset.tokenId,
+            order.outAsset.quantity,
+            order.maker,
+            order.orderNonce
+        );
         uint256 comp = completed[orderId] + buyingAmount;
 
         // makes sure order is not already closed
@@ -171,13 +196,44 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
         return comp == order.outAsset.quantity;
     }
 
-    function _doTransfers(OrderData memory order, uint256 amount)
-        internal
-        returns (OrderTransfers memory orderTransfers)
-    {
+    /// @dev This function verifies meta for an order
+    ///      We use meta to have buyerFee and sellerFee per transaction instead of global
+    ///      this also allows to not have open ended orders that could be reused months after it was made
+    /// @param orderSig the signature of the order
+    /// @param saleMeta the meta for this sale
+    /// @param saleSig signature for this sale
+    function _verifyOrderMeta(
+        Signature memory orderSig,
+        OrderMeta memory saleMeta,
+        Signature memory saleSig
+    ) internal {
+        require(
+            saleMeta.expiration == 0 || saleMeta.expiration >= block.timestamp,
+            'Sale: Buy Order expired'
+        );
+
+        require(saleMeta.buyer == msg.sender, 'Sale Metadata not for operator');
+
+        // verifies that saleSig is right
+        bytes32 message = prepareOrderMetaMessage(orderSig, saleMeta);
+        require(
+            recoverMessageSignature(message, saleSig) == exchangeSigner,
+            'Sale: Incorrect order meta signature'
+        );
+
+        require(usedSaleMeta[message] == false, 'Sale Metadata already used');
+
+        usedSaleMeta[message] = true;
+    }
+
+    function _doTransfers(
+        OrderData memory order,
+        uint256 amount,
+        OrderMeta memory saleMeta
+    ) internal returns (OrderTransfers memory orderTransfers) {
         // get all values into a struct
         // it will help later when we introduce token payments
-        orderTransfers = computeValues(order, amount);
+        orderTransfers = computeValues(order, amount, saleMeta);
 
         // this here is because we're not using tokens
         // verify that msg.value is right
@@ -188,7 +244,7 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
         );
 
         // transfer ethereum
-        if (orderTransfers.total > 0) {
+        if (orderTransfers.totalTransaction > 0) {
             // send service fees (buyerFee + sellerFees) to beneficiary
             if (orderTransfers.serviceFees > 0) {
                 beneficiary.transfer(orderTransfers.serviceFees);

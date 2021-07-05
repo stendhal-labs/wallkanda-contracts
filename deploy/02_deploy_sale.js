@@ -2,7 +2,7 @@
 module.exports = async ({ getNamedAccounts, deployments, ethers }) => {
     const { deploy, execute } = deployments;
 
-    const { deployer } = await getNamedAccounts();
+    const { deployer, exchangeSigner } = await getNamedAccounts();
 
     const TransferProxy = await deployments.get('TransferProxy');
 
@@ -10,14 +10,18 @@ module.exports = async ({ getNamedAccounts, deployments, ethers }) => {
         from: deployer,
         proxy: {
             proxyContract: 'OpenZeppelinTransparentProxy',
-            methodName: 'initialize',
+            execute: {
+                init: {
+                    methodName: 'initialize',
+                    args: [
+                        process.env.SERVICE_FEE_BENEFICIARY,
+                        TransferProxy.address,
+                        exchangeSigner,
+                    ],
+                },
+            },
         },
-        args: [
-            process.env.SERVICE_FEE_BENEFICIARY,
-            TransferProxy.address,
-            process.env.BUYER_FEE,
-            process.env.SELLER_FEE,
-        ],
+
         log: true,
     });
 

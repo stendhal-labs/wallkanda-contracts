@@ -30,19 +30,13 @@ describe('Exchange ERC1155', function () {
     let signature;
     let values;
     let msgValue;
+    let signer;
 
     const serviceFeeRecipient = process.env.SERVICE_FEE_BENEFICIARY;
 
     beforeEach(async function () {
-        [
-            owner,
-            addr1,
-            addr2,
-            addr3,
-            addr4,
-            OWNER,
-            BUYER,
-        ] = await ethers.getSigners();
+        [owner, signer, addr2, addr3, addr4, OWNER, BUYER] =
+            await ethers.getSigners();
 
         await deployments.fixture();
 
@@ -86,15 +80,24 @@ describe('Exchange ERC1155', function () {
             },
             maxPerBuy: 0,
             orderNonce: 1337,
+            expiration: (await getTimestamp()) + 24 * 60 * 60,
         };
 
         signature = await signOrder(order);
+        /*
         values = await getOrderValue(order);
         msgValue = values.totalTransaction;
 
         valuesForMore = await getOrderValue(order, SELLING_AMOUNT - 1);
         msgValueForMore = valuesForMore.totalTransaction;
+        */
     });
+
+    async function getTimestamp() {
+        const block = await ethers.provider.getBlockNumber();
+        const { timestamp } = await ethers.provider.getBlock(block);
+        return timestamp;
+    }
 
     // sign message with account
     async function signMessage(message, account = OWNER) {
@@ -122,40 +125,64 @@ describe('Exchange ERC1155', function () {
         return await signMessage(message);
     }
 
-    async function getOrderValue(order, buying = 1) {
-        return await saleContract.computeValues(order, buying);
+    // sign sale meta
+    async function getSignedSaleMeta(
+        orderSign,
+        buyer,
+        sellerFee,
+        buyerFee,
+        isExpired = false,
+    ) {
+        const timestamp = await getTimestamp();
+
+        // isExpired will create an expired  order, for tests purpose
+        const expiration = isExpired
+            ? timestamp - 10
+            : timestamp + 24 * 60 * 60;
+
+        const saleMeta = {
+            buyer,
+            sellerFee,
+            buyerFee,
+            expiration,
+            nonce: Date.now(),
+        };
+
+        // hash order
+        const message = await saleContract.prepareOrderMetaMessage(
+            orderSign,
+            saleMeta,
+        );
+
+        // sign message
+        return {
+            saleMeta,
+            saleMetaSignature: await signMessage(message, signer),
+        };
     }
 
-    it('Should fail because signature is not the one expected', async () => {
-        await expect(
-            saleContract.connect(BUYER).buy(
-                order,
-                {
-                    ...signature,
-                    v: '0x10',
-                },
-                1,
-                {
-                    value: values.total.div(toBN(2)).toString(),
-                },
-            ),
-        ).to.be.revertedWith('Sale: Incorrect order signature');
-    });
-
-    it('Should fail because value is not the one expected', async () => {
-        await expect(
-            saleContract.connect(BUYER).buy(order, signature, 1, {
-                value: values.total.div(toBN(2)).toString(),
-            }),
-        ).to.be.revertedWith('Sale: Sent value is incorrect');
-    });
+    async function getOrderValue(order, saleMeta, buying = 1) {
+        return await saleContract.computeValues(order, buying, saleMeta);
+    }
 
     it('Should transfer ERC1155 and close order', async () => {
+        const { saleMeta, saleMetaSignature } = await getSignedSaleMeta(
+            signature,
+            BUYER.address,
+            process.env.SELLER_FEE,
+            process.env.BUYER_FEE,
+        );
+
+        values = await getOrderValue(order, saleMeta);
+        msgValue = values.totalTransaction;
+
         let quantity = 1;
         await expect(
-            saleContract.connect(BUYER).buy(order, signature, quantity, {
-                value: msgValue,
-            }),
+            saleContract
+                .connect(BUYER)
+                .buy(order, signature, quantity, saleMeta, saleMetaSignature, {
+                    value: msgValue,
+                }),
         ).to.emit(saleContract, 'Buy');
 
         const balanceOf = await erc1155.balanceOf(
@@ -167,20 +194,52 @@ describe('Exchange ERC1155', function () {
             "ERC1155 didn't go to BUYER",
         );
 
-        quantity = SELLING_AMOUNT - 1;
-        await expect(
-            saleContract.connect(BUYER).buy(order, signature, quantity, {
-                value: msgValueForMore,
-            }),
-        )
-            .to.emit(saleContract, 'Buy')
-            .to.emit(saleContract, 'CloseOrder');
+        {
+            const { saleMeta, saleMetaSignature } = await getSignedSaleMeta(
+                signature,
+                BUYER.address,
+                process.env.SELLER_FEE,
+                process.env.BUYER_FEE,
+            );
+            quantity = SELLING_AMOUNT - 1;
+            valuesForMore = await getOrderValue(order, saleMeta, quantity);
+            msgValueForMore = valuesForMore.totalTransaction;
+
+            await expect(
+                saleContract
+                    .connect(BUYER)
+                    .buy(
+                        order,
+                        signature,
+                        quantity,
+                        saleMeta,
+                        saleMetaSignature,
+                        {
+                            value: msgValueForMore,
+                        },
+                    ),
+            )
+                .to.emit(saleContract, 'Buy')
+                .to.emit(saleContract, 'CloseOrder');
+        }
     });
 
     it('Should change balances after Transfer', async () => {
-        let tx = await saleContract.connect(BUYER).buy(order, signature, 1, {
-            value: msgValue,
-        });
+        const { saleMeta, saleMetaSignature } = await getSignedSaleMeta(
+            signature,
+            BUYER.address,
+            process.env.SELLER_FEE,
+            process.env.BUYER_FEE,
+        );
+
+        values = await getOrderValue(order, saleMeta);
+        msgValue = values.totalTransaction;
+
+        let tx = await saleContract
+            .connect(BUYER)
+            .buy(order, signature, 1, saleMeta, saleMetaSignature, {
+                value: msgValue,
+            });
 
         const serviceFeeRecipientAccount = new ethers.VoidSigner(
             serviceFeeRecipient,
@@ -192,19 +251,39 @@ describe('Exchange ERC1155', function () {
             [values.sellerEndValue, msgValue.mul(toBN(-1)), values.serviceFees],
         );
 
-        tx = await saleContract
-            .connect(BUYER)
-            .buy(order, signature, SELLING_AMOUNT - 1, {
-                value: msgValueForMore,
-            });
+        {
+            const { saleMeta, saleMetaSignature } = await getSignedSaleMeta(
+                signature,
+                BUYER.address,
+                process.env.SELLER_FEE,
+                process.env.BUYER_FEE,
+            );
 
-        await expect(tx).to.changeEtherBalances(
-            [OWNER, BUYER, serviceFeeRecipientAccount],
-            [
-                valuesForMore.sellerEndValue,
-                msgValueForMore.mul(toBN(-1)),
-                valuesForMore.serviceFees,
-            ],
-        );
+            quantity = SELLING_AMOUNT - 1;
+            valuesForMore = await getOrderValue(order, saleMeta, quantity);
+            msgValueForMore = valuesForMore.totalTransaction;
+
+            tx = await saleContract
+                .connect(BUYER)
+                .buy(
+                    order,
+                    signature,
+                    SELLING_AMOUNT - 1,
+                    saleMeta,
+                    saleMetaSignature,
+                    {
+                        value: msgValueForMore,
+                    },
+                );
+
+            await expect(tx).to.changeEtherBalances(
+                [OWNER, BUYER, serviceFeeRecipientAccount],
+                [
+                    valuesForMore.sellerEndValue,
+                    msgValueForMore.mul(toBN(-1)),
+                    valuesForMore.serviceFees,
+                ],
+            );
+        }
     });
 });

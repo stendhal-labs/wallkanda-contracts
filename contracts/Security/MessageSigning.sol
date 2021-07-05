@@ -17,7 +17,7 @@ abstract contract MessageSigning {
      */
     function recoverMessageSignature(
         bytes32 message,
-        Signature calldata signature
+        Signature memory signature
     ) public pure returns (address) {
         uint8 v = signature.v;
         if (v < 27) {

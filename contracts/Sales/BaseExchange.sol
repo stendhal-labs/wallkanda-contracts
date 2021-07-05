@@ -8,9 +8,6 @@ import '../Security/MessageSigning.sol';
 import '../Tokens/ERC2981/IERC2981Royalties.sol';
 
 contract BaseExchange is OwnableUpgradeable, MessageSigning {
-    uint256 public sellerServiceFee;
-    uint256 public buyerServiceFee;
-
     address payable public beneficiary;
     ITransferProxy public transferProxy;
 
@@ -31,32 +28,12 @@ contract BaseExchange is OwnableUpgradeable, MessageSigning {
 
     function __BaseExchange_init(
         address payable _beneficiary,
-        address _transferProxy,
-        uint256 _buyerServiceFee,
-        uint256 _sellerServiceFee
+        address _transferProxy
     ) internal initializer {
         __Ownable_init();
 
         setBeneficiary(_beneficiary);
         setTransferProxy(_transferProxy);
-        setBuyerServiceFee(_buyerServiceFee);
-        setSellerServiceFee(_sellerServiceFee);
-    }
-
-    function setBuyerServiceFee(uint256 buyerServiceFee_)
-        public
-        virtual
-        onlyOwner
-    {
-        buyerServiceFee = buyerServiceFee_;
-    }
-
-    function setSellerServiceFee(uint256 sellerServiceFee_)
-        public
-        virtual
-        onlyOwner
-    {
-        sellerServiceFee = sellerServiceFee_;
     }
 
     function setTransferProxy(address transferProxy_) public virtual onlyOwner {
@@ -77,7 +54,9 @@ contract BaseExchange is OwnableUpgradeable, MessageSigning {
         uint256 unitPrice,
         address token,
         uint256 tokenId,
-        uint256 amount
+        uint256 amount,
+        uint256 buyerServiceFee,
+        uint256 sellerServiceFee
     ) internal view returns (OrderTransfers memory orderTransfers) {
         orderTransfers.total = unitPrice * amount;
         uint256 buyerFee = (orderTransfers.total * buyerServiceFee) / 10000;
@@ -90,8 +69,11 @@ contract BaseExchange is OwnableUpgradeable, MessageSigning {
         // all fees
         orderTransfers.serviceFees = sellerFee + buyerFee;
 
-        (address royaltiesRecipient, uint256 royaltiesAmount) =
-            _getRoyalties(token, tokenId, orderTransfers.total);
+        (address royaltiesRecipient, uint256 royaltiesAmount) = _getRoyalties(
+            token,
+            tokenId,
+            orderTransfers.total
+        );
 
         // if there are royalties
         if (

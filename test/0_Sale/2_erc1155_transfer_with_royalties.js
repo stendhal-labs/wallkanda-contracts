@@ -29,11 +29,25 @@ describe('Exchange ERC1155 With royalties', function () {
     let values;
     let msgValue;
 
+    let saleMeta;
+    let saleMetaSignature;
+
+    let saleMetaMore;
+    let saleMetaMoreSignature;
+
     const serviceFeeRecipient = process.env.SERVICE_FEE_BENEFICIARY;
 
     beforeEach(async function () {
-        [owner, addr1, addr2, addr3, addr4, OWNER, BUYER, ROYALTIES_RECIPIENT] =
-            await ethers.getSigners();
+        [
+            owner,
+            signer,
+            addr2,
+            addr3,
+            addr4,
+            OWNER,
+            BUYER,
+            ROYALTIES_RECIPIENT,
+        ] = await ethers.getSigners();
 
         await deployments.fixture();
 
@@ -86,15 +100,47 @@ describe('Exchange ERC1155 With royalties', function () {
             },
             maxPerBuy: 0,
             orderNonce: 1337,
+            expiration: (await getTimestamp()) + 24 * 60 * 60,
         };
 
         signature = await signOrder(order);
-        values = await getOrderValue(order);
+
+        const _saleMeta = await getSignedSaleMeta(
+            signature,
+            BUYER.address,
+            process.env.SELLER_FEE,
+            process.env.BUYER_FEE,
+        );
+
+        saleMeta = _saleMeta.saleMeta;
+        saleMetaSignature = _saleMeta.saleMetaSignature;
+
+        values = await getOrderValue(order, saleMeta);
         msgValue = values.totalTransaction;
 
-        valuesForMore = await getOrderValue(order, SELLING_AMOUNT - 1);
+        const _saleMetaMore = await getSignedSaleMeta(
+            signature,
+            BUYER.address,
+            process.env.SELLER_FEE,
+            process.env.BUYER_FEE,
+        );
+
+        saleMetaMore = _saleMetaMore.saleMeta;
+        saleMetaMoreSignature = _saleMetaMore.saleMetaSignature;
+
+        valuesForMore = await getOrderValue(
+            order,
+            saleMetaMore,
+            SELLING_AMOUNT - 1,
+        );
         msgValueForMore = valuesForMore.totalTransaction;
     });
+
+    async function getTimestamp() {
+        const block = await ethers.provider.getBlockNumber();
+        const { timestamp } = await ethers.provider.getBlock(block);
+        return timestamp;
+    }
 
     // sign message with account
     async function signMessage(message, account = OWNER) {
@@ -122,15 +168,53 @@ describe('Exchange ERC1155 With royalties', function () {
         return await signMessage(message);
     }
 
-    async function getOrderValue(order, buying = 1) {
-        return await saleContract.computeValues(order, buying);
+    // sign sale meta
+    async function getSignedSaleMeta(
+        orderSign,
+        buyer,
+        sellerFee,
+        buyerFee,
+        isExpired = false,
+    ) {
+        const timestamp = await getTimestamp();
+
+        // isExpired will create an expired  order, for tests purpose
+        const expiration = isExpired
+            ? timestamp - 10
+            : timestamp + 24 * 60 * 60;
+
+        const saleMeta = {
+            buyer,
+            sellerFee,
+            buyerFee,
+            expiration,
+            nonce: Date.now(),
+        };
+
+        // hash order
+        const message = await saleContract.prepareOrderMetaMessage(
+            orderSign,
+            saleMeta,
+        );
+
+        // sign message
+        return {
+            saleMeta,
+            saleMetaSignature: await signMessage(message, signer),
+        };
+    }
+
+    async function getOrderValue(order, saleMeta, buying = 1) {
+        return await saleContract.computeValues(order, buying, saleMeta);
     }
 
     // only check if balances of all actors (buyer, seller, royalties recipient, servicefee recipient) match
     it('Should change balances after Transfer', async () => {
-        let tx = await saleContract.connect(BUYER).buy(order, signature, 1, {
-            value: msgValue,
-        });
+        let tx = await saleContract
+            .connect(BUYER)
+            .buy(order, signature, 1, saleMeta, saleMetaSignature, {
+                value: msgValue,
+            });
 
         const royaltiesRecipient = new ethers.VoidSigner(
             values.royaltiesRecipient,
@@ -154,9 +238,16 @@ describe('Exchange ERC1155 With royalties', function () {
 
         tx = await saleContract
             .connect(BUYER)
-            .buy(order, signature, SELLING_AMOUNT - 1, {
-                value: msgValueForMore,
-            });
+            .buy(
+                order,
+                signature,
+                SELLING_AMOUNT - 1,
+                saleMetaMore,
+                saleMetaMoreSignature,
+                {
+                    value: msgValueForMore,
+                },
+            );
 
         await expect(tx).to.changeEtherBalances(
             [OWNER, BUYER, serviceFeeRecipientAccount, royaltiesRecipient],

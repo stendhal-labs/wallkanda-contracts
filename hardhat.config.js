@@ -44,17 +44,26 @@ module.exports = {
         rinkeby: {
             gasPrice: 90000000000,
             url: process.env.PROVIDER,
-            accounts: [process.env.DEPLOYER_PKEY],
+            accounts: [
+                process.env.DEPLOYER_PKEY,
+                process.env.EXCHANGE_SIGNER_PKEY,
+            ],
         },
         mainnet: {
             gasPrice: 50000000000,
             url: process.env.PROVIDER,
-            accounts: [process.env.DEPLOYER_PKEY],
+            accounts: [
+                process.env.DEPLOYER_PKEY,
+                process.env.EXCHANGE_SIGNER_PKEY,
+            ],
         },
     },
     namedAccounts: {
         deployer: {
             default: 0, // here this will by default take the first account as deployer
+        },
+        exchangeSigner: {
+            default: 1,
         },
     },
     // defines where to find already deployed contracts since we are reusing some contracts from BeyondNFT

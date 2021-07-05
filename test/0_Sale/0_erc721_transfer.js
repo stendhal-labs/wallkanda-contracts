@@ -27,19 +27,13 @@ describe('Exchange 721', function () {
     let signature;
     let values;
     let msgValue;
+    let signer;
 
     const serviceFeeRecipient = process.env.SERVICE_FEE_BENEFICIARY;
 
     beforeEach(async function () {
-        [
-            owner,
-            addr1,
-            addr2,
-            addr3,
-            addr4,
-            OWNER,
-            BUYER,
-        ] = await ethers.getSigners();
+        [owner, signer, addr2, addr3, addr4, OWNER, BUYER] =
+            await ethers.getSigners();
 
         await deployments.fixture();
 
@@ -84,12 +78,17 @@ describe('Exchange 721', function () {
             },
             maxPerBuy: 0,
             orderNonce: 1337,
+            expiration: (await getTimestamp()) + 24 * 60 * 60,
         };
 
         signature = await signOrder(order);
-        values = await getOrderValue(order);
-        msgValue = values.totalTransaction;
     });
+
+    async function getTimestamp() {
+        const block = await ethers.provider.getBlockNumber();
+        const { timestamp } = await ethers.provider.getBlock(block);
+        return timestamp;
+    }
 
     // sign message with account
     async function signMessage(message, account = OWNER) {
@@ -117,39 +116,176 @@ describe('Exchange 721', function () {
         return await signMessage(message);
     }
 
-    async function getOrderValue(order, buying = 1) {
-        return await saleContract.computeValues(order, buying);
+    // sign sale meta
+    async function getSignedSaleMeta(
+        orderSign,
+        buyer,
+        sellerFee,
+        buyerFee,
+        isExpired = false,
+    ) {
+        const timestamp = await getTimestamp();
+
+        // isExpired will create an expired  order, for tests purpose
+        const expiration = isExpired
+            ? timestamp - 10
+            : timestamp + 24 * 60 * 60;
+
+        const saleMeta = {
+            buyer,
+            sellerFee,
+            buyerFee,
+            expiration,
+            nonce: Date.now(),
+        };
+
+        // hash order
+        const message = await saleContract.prepareOrderMetaMessage(
+            orderSign,
+            saleMeta,
+        );
+
+        // sign message
+        return {
+            saleMeta,
+            saleMetaSignature: await signMessage(message, signer),
+        };
+    }
+
+    async function getOrderValue(order, saleMeta, buying = 1) {
+        return await saleContract.computeValues(order, buying, saleMeta);
     }
 
     it('Should fail because signature is not the one expected', async () => {
+        let fakeSignature = {
+            ...signature,
+            v: '0x10',
+        };
+        const { saleMeta, saleMetaSignature } = await getSignedSaleMeta(
+            fakeSignature,
+            BUYER.address,
+            process.env.SELLER_FEE,
+            process.env.BUYER_FEE,
+        );
+
+        values = await getOrderValue(order, saleMeta);
+        msgValue = values.totalTransaction;
+
         await expect(
-            saleContract.connect(BUYER).buy(
-                order,
-                {
-                    ...signature,
-                    v: '0x10',
-                },
-                1,
-                {
+            saleContract
+                .connect(BUYER)
+                .buy(order, fakeSignature, 1, saleMeta, saleMetaSignature, {
                     value: values.totalTransaction.div(toBN(2)).toString(),
-                },
-            ),
+                }),
         ).to.be.revertedWith('Sale: Incorrect order signature');
     });
 
     it('Should fail because value is not the one expected', async () => {
+        const { saleMeta, saleMetaSignature } = await getSignedSaleMeta(
+            signature,
+            BUYER.address,
+            process.env.SELLER_FEE,
+            process.env.BUYER_FEE,
+        );
+
+        values = await getOrderValue(order, saleMeta);
+        msgValue = values.totalTransaction;
+
         await expect(
-            saleContract.connect(BUYER).buy(order, signature, 1, {
-                value: values.totalTransaction.div(toBN(2)).toString(),
-            }),
+            saleContract
+                .connect(BUYER)
+                .buy(order, signature, 1, saleMeta, saleMetaSignature, {
+                    value: values.totalTransaction.div(toBN(2)).toString(),
+                }),
         ).to.be.revertedWith('Sale: Sent value is incorrect');
     });
 
-    it('Should transfer ERC721', async () => {
+    it('Should fail because saleMeta signature is not valid', async () => {
+        const { saleMeta, saleMetaSignature } = await getSignedSaleMeta(
+            signature,
+            BUYER.address,
+            process.env.SELLER_FEE,
+            process.env.BUYER_FEE,
+        );
+
+        values = await getOrderValue(order, saleMeta);
+        msgValue = values.totalTransaction;
+
         await expect(
-            saleContract.connect(BUYER).buy(order, signature, 1, {
-                value: msgValue,
-            }),
+            saleContract.connect(BUYER).buy(
+                order,
+                signature,
+                1,
+                saleMeta,
+                {
+                    ...saleMetaSignature,
+                    v: '0x10',
+                },
+                {
+                    value: msgValue,
+                },
+            ),
+        ).to.be.revertedWith('Sale: Incorrect order meta signature');
+    });
+
+    it('Should fail because saleMeta is expired', async () => {
+        const { saleMeta, saleMetaSignature } = await getSignedSaleMeta(
+            signature,
+            BUYER.address,
+            process.env.SELLER_FEE,
+            process.env.BUYER_FEE,
+            true,
+        );
+
+        values = await getOrderValue(order, saleMeta);
+        msgValue = values.totalTransaction;
+
+        await expect(
+            saleContract
+                .connect(BUYER)
+                .buy(order, signature, 1, saleMeta, saleMetaSignature, {
+                    value: msgValue,
+                }),
+        ).to.be.revertedWith('Sale: Buy Order expired');
+    });
+
+    it('Should fail because saleMeta is not for this user', async () => {
+        const { saleMeta, saleMetaSignature } = await getSignedSaleMeta(
+            signature,
+            addr3.address,
+            process.env.SELLER_FEE,
+            process.env.BUYER_FEE,
+        );
+
+        values = await getOrderValue(order, saleMeta);
+        msgValue = values.totalTransaction;
+
+        await expect(
+            saleContract
+                .connect(BUYER)
+                .buy(order, signature, 1, saleMeta, saleMetaSignature, {
+                    value: msgValue,
+                }),
+        ).to.be.revertedWith('Sale Metadata not for operator');
+    });
+
+    it('Should transfer ERC721', async () => {
+        const { saleMeta, saleMetaSignature } = await getSignedSaleMeta(
+            signature,
+            BUYER.address,
+            process.env.SELLER_FEE,
+            process.env.BUYER_FEE,
+        );
+
+        values = await getOrderValue(order, saleMeta);
+        msgValue = values.totalTransaction;
+
+        await expect(
+            saleContract
+                .connect(BUYER)
+                .buy(order, signature, 1, saleMeta, saleMetaSignature, {
+                    value: msgValue,
+                }),
         )
             .to.emit(saleContract, 'Buy')
             .to.emit(saleContract, 'CloseOrder');
@@ -163,9 +299,21 @@ describe('Exchange 721', function () {
     });
 
     it('Should change balances after Transfer', async () => {
-        const tx = await saleContract.connect(BUYER).buy(order, signature, 1, {
-            value: msgValue,
-        });
+        const { saleMeta, saleMetaSignature } = await getSignedSaleMeta(
+            signature,
+            BUYER.address,
+            process.env.SELLER_FEE,
+            process.env.BUYER_FEE,
+        );
+
+        values = await getOrderValue(order, saleMeta);
+        msgValue = values.totalTransaction;
+
+        const tx = await saleContract
+            .connect(BUYER)
+            .buy(order, signature, 1, saleMeta, saleMetaSignature, {
+                value: msgValue,
+            });
 
         const royaltiesRecipient = new ethers.VoidSigner(
             values.royaltiesRecipient,
@@ -189,16 +337,41 @@ describe('Exchange 721', function () {
     });
 
     it('Should fail because same sale order with same nonce already closed on sale order', async () => {
-        // buy once
-        await saleContract.connect(BUYER).buy(order, signature, 1, {
-            value: msgValue,
-        });
+        const { saleMeta, saleMetaSignature } = await getSignedSaleMeta(
+            signature,
+            BUYER.address,
+            process.env.SELLER_FEE,
+            process.env.BUYER_FEE,
+        );
 
-        // try to buy again
-        await expect(
-            saleContract.connect(BUYER).buy(order, signature, 1, {
+        values = await getOrderValue(order, saleMeta);
+        msgValue = values.totalTransaction;
+
+        // buy once
+        await saleContract
+            .connect(BUYER)
+            .buy(order, signature, 1, saleMeta, saleMetaSignature, {
                 value: msgValue,
-            }),
-        ).to.be.revertedWith('Sale: Order already closed or quantity too high');
+            });
+
+        {
+            const { saleMeta, saleMetaSignature } = await getSignedSaleMeta(
+                signature,
+                BUYER.address,
+                process.env.SELLER_FEE,
+                process.env.BUYER_FEE,
+            );
+
+            // try to buy again
+            await expect(
+                saleContract
+                    .connect(BUYER)
+                    .buy(order, signature, 1, saleMeta, saleMetaSignature, {
+                        value: msgValue,
+                    }),
+            ).to.be.revertedWith(
+                'Sale: Order already closed or quantity too high',
+            );
+        }
     });
 });

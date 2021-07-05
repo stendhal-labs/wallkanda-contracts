@@ -13,33 +13,26 @@ contract Auction is BaseExchange, AuctionStorage {
     /// @notice Upgradeable contracts constructor
     /// @param _beneficiary - the address that gets the service fees
     /// @param _transferProxy - the contract used to transfer the NFTs (and others)
-    /// @param _buyerServiceFee -  amount of fees on buyer
-    /// @param _sellerServiceFee - amount of fees on seller
+    /// @param sellerServiceFee_ - amount of fees on seller
     function initialize(
         address payable _beneficiary,
         address _transferProxy,
-        uint256 _buyerServiceFee,
-        uint256 _sellerServiceFee
+        uint256 sellerServiceFee_
     ) public initializer {
-        __BaseExchange_init(
-            _beneficiary,
-            _transferProxy,
-            _buyerServiceFee,
-            _sellerServiceFee
-        );
+        __BaseExchange_init(_beneficiary, _transferProxy);
+        if (sellerServiceFee_ > 0) {
+            setSellerServiceFee(sellerServiceFee_);
+        }
     }
 
-    /// @notice Allows to set service fees for buyer
-    /// @dev on auctions, we can not add a buyerFee since the price is already escrowed. So Buyer fee need to be 0
-    /// @param buyerServiceFee_ the buyer fee - here must be 0
-    function setBuyerServiceFee(uint256 buyerServiceFee_)
+    /// @notice Allows to set service fees for seller
+    /// @param sellerServiceFee_ the seller fee
+    function setSellerServiceFee(uint256 sellerServiceFee_)
         public
         virtual
-        override
         onlyOwner
     {
-        require(buyerServiceFee_ == 0, "Can't have buyer fees on auctions");
-        buyerServiceFee = buyerServiceFee_;
+        sellerServiceFee = sellerServiceFee_;
     }
 
     /// @notice Place a bid on an auction
@@ -47,7 +40,7 @@ contract Auction is BaseExchange, AuctionStorage {
     /// @param signature - the signature by the auction creator
     function placeBid(
         AuctionParams memory auctionParams,
-        Signature calldata signature,
+        Signature memory signature,
         uint256 amount
     ) external payable {
         bytes32 auctionId = verifyAuctionSignature(auctionParams, signature);
@@ -217,7 +210,7 @@ contract Auction is BaseExchange, AuctionStorage {
     /// @param signature - the signature by the auction creator
     function cancelBid(
         AuctionParams memory auctionParams,
-        Signature calldata signature
+        Signature memory signature
     ) external {
         bytes32 auctionId = verifyAuctionSignature(auctionParams, signature);
         AuctionDetails storage auction = auctions[auctionId];
@@ -254,7 +247,7 @@ contract Auction is BaseExchange, AuctionStorage {
     /// @return auctionId - the identifier of the auction and also the message signed by the maker
     function verifyAuctionSignature(
         AuctionParams memory auctionParams,
-        Signature calldata signature
+        Signature memory signature
     ) public pure returns (bytes32 auctionId) {
         // verifies if signature is valid and has been signed by auctionParams.maker
         auctionId = prepareAuction(auctionParams);
@@ -279,7 +272,9 @@ contract Auction is BaseExchange, AuctionStorage {
                 auctionParams.quantity,
                 auctionParams.token,
                 auctionParams.tokenId,
-                1
+                1,
+                0, // buyerServiceFee can only be 0 on auctions
+                sellerServiceFee
             );
     }
 
