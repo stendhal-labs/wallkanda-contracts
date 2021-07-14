@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "chain": "hardhat node",
+    "coverage": "hardhat coverage",
     "fork": "hardhat node --network hardhat",
     "compile": "hardhat compile",
     "test": "hardhat test --network hardhat"
@@ -41,6 +42,7 @@
     "hardhat-deploy-ethers": "*",
     "hardhat-tracer": "*",
     "hardhat-waffle": "*",
-    "minimist": "^1.2.5"
+    "minimist": "^1.2.5",
+    "solidity-coverage": "^0.7.16"
   }
 }

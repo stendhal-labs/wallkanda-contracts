@@ -5,6 +5,7 @@ require('hardhat-deploy');
 require('hardhat-deploy-ethers');
 require('hardhat-tracer');
 require('@nomiclabs/hardhat-etherscan');
+require('solidity-coverage');
 const dotenv = require('dotenv');
 
 function mergeConfigs(path) {

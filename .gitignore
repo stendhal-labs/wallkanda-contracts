@@ -1,8 +1,12 @@
 node_modules
 
-#Hardhat files
+# Hardhat files
 cache
 artifacts
 
 .env*
 !.env.SAMPLE
+
+# Coverage folder & file
+coverage
+coverage.json
