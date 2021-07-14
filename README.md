@@ -19,6 +19,8 @@ The existing contracts includes:
 
 `npm install`
 
+Create a `.env` file from `.env.SAMPLE`
+
 #### Test
 
 `npm run test`
