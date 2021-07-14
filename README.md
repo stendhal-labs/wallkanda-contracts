@@ -1,8 +1,37 @@
-This is the new contracts project for Wallkanda Mainnet.
+# Wallkanda contracts
 
-Ethereum has crazy gas amount right now, so we can't really think about creating the same big thing that we are doing on Matic.
+> The web3 toolbox for street-artists.
 
-The idea is to be efficient and create the less contracts possible.
+This repository contains all the Solidity contracts for [Wallkanda](https://wallkanda.art), their tests and deployment files.
 
-We are also building some on existing contracts from BeyondNFT (TransferProxy and SimpleSale being already deployed on mainnet, we can deploy simple Proxies to those).
+The existing contracts includes:
 
+- a **NFT** ([ERC1155](https://eips.ethereum.org/EIPS/eip-1155)) contract to mint artworks
+- a **Sale** contract to support buy/sell and auctions
+
+## Overview
+
+[Hardhat](https://hardhat.org/) and its wide range of plugins are our preferred development tool.
+
+### Setup
+
+#### Installation
+
+`npm install`
+
+#### Test
+
+`npm run test`
+
+### Contract metadata
+
+The contract metadata for NFT are made available for OpenSea in `contracts-metadata\mainnet.json`.
+
+## Credits
+
+- [BeyondNFT](https://beyondnft.io/) for existing/shared contracts already deployed on Mainnet.
+- [OpenZeppelin contracts library](https://github.com/OpenZeppelin/openzeppelin-contracts)
+
+## License
+
+Wallkanda Contracts are released under the [MIT License](LICENSE).
