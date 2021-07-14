@@ -6,6 +6,7 @@ require('hardhat-deploy-ethers');
 require('hardhat-tracer');
 require('@nomiclabs/hardhat-etherscan');
 require('solidity-coverage');
+require('hardhat-gas-reporter');
 const dotenv = require('dotenv');
 
 function mergeConfigs(path) {
@@ -81,6 +82,14 @@ module.exports = {
     //     },
     // },
 
+    gasReporter: {
+        enabled: !!process.env.REPORT_GAS === true,
+        currency: 'USD',
+        gasPrice: 21,
+        showTimeSpent: true,
+        excludeContracts: ['mocks'],
+        coinmarketcap: process.env.COINMARKETCAP_API_KEY,
+    },
     etherscan: {
         // Your API key for Etherscan
         // Obtain one at https://etherscan.io/

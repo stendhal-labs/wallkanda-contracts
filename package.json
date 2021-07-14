@@ -8,7 +8,8 @@
     "coverage": "hardhat coverage",
     "fork": "hardhat node --network hardhat",
     "compile": "hardhat compile",
-    "test": "hardhat test --network hardhat"
+    "test": "hardhat test --network hardhat",
+    "test:gas-report": "REPORT_GAS=true npm run test"
   },
   "homepage": "https://github.com/stendhal-labs/wallkanda-contracts",
   "repository": {
@@ -40,6 +41,7 @@
     "hardhat": "^2.4.1",
     "hardhat-deploy": "^0.8.9",
     "hardhat-deploy-ethers": "*",
+    "hardhat-gas-reporter": "^1.0.4",
     "hardhat-tracer": "*",
     "hardhat-waffle": "*",
     "minimist": "^1.2.5",
