@@ -169,53 +169,56 @@ contract EditionsRegistry is
         }
     }
 
+    /// @dev Post Upgrade, called after an upgrade of the contract
+    function postUpgrade() public proxied {
+        // reset _safeMintBatchForArtistsAndTransferFlag to be able to do the
+        // Paris treasure hunt generation call
+        _safeMintBatchForArtistsAndTransferFlag = 0;
+    }
+
     /**
      * @dev allows to create Batch NFTs and to send part of those to some recipient
-     * This function is a ONE TIME USE
+     * This function is a ONE TIME USE per upgrade
      *
      * Use cases are "Giveaways" and things like this.
      */
     function safeMintBatchForArtistsAndTransfer(
         address[] memory artists, // artist creator of the NFT
-        uint256[] memory ids, // id of the NFTs
         uint256[] memory amounts, // amounts to create
+        uint256[] memory royalties, // royalties for each one of them
         address recipient, // recipient
         bytes memory data
     ) public virtual onlyOwner {
         require(_safeMintBatchForArtistsAndTransferFlag == 0, 'Already used.');
 
-        // set flag to 2 so isApprovedForall is overrode
-        _safeMintBatchForArtistsAndTransferFlag = 2;
-
         require(
-            artists.length == ids.length && artists.length == amounts.length,
+            artists.length == amounts.length &&
+                artists.length == royalties.length,
             'ERC1155: length mismatch'
         );
 
+        // set flag to 2 so isApprovedForall is overrode
+        _safeMintBatchForArtistsAndTransferFlag = 2;
+
         uint256 _currentId = currentId;
         for (uint256 i; i < artists.length; i++) {
-            // mint token for artist with 4% royalties
+            _currentId++;
+            // mint token for artist with royalties[i] royalties
             _mint(
-                _currentId + ids[i],
+                _currentId,
                 artists[i],
                 amounts[i],
                 artists[i],
-                400,
+                royalties[i],
                 data
             );
 
             // transfer 1 to the recipient wallet
-            safeTransferFrom(
-                artists[i],
-                recipient,
-                _currentId + ids[i],
-                1,
-                data
-            );
+            safeTransferFrom(artists[i], recipient, _currentId, 1, data);
         }
 
         // set current id to highest id
-        currentId = ids[ids.length - 1];
+        currentId = _currentId;
 
         // set flag to 1 so we can never use this function again
         _safeMintBatchForArtistsAndTransferFlag = 1;
@@ -233,14 +236,14 @@ contract EditionsRegistry is
      */
     function setInteractiveConfURI(
         uint256 tokenId,
-        address owner,
-        string calldata interactiveConfURI
+        address owner_,
+        string calldata interactiveConfURI_
     ) public {
         require(
-            owner == _msgSender() || isApprovedForAll(owner, _msgSender()),
+            owner_ == _msgSender() || isApprovedForAll(owner_, _msgSender()),
             'ERC1155: caller is not owner nor approved'
         );
-        _setInteractiveConfURI(tokenId, owner, interactiveConfURI);
+        _setInteractiveConfURI(tokenId, owner_, interactiveConfURI_);
     }
 
     /**
@@ -252,10 +255,10 @@ contract EditionsRegistry is
         override
         returns (bool isOperator)
     {
-        // this is used in the "one time use" function safeMintBatchForArtistsAndTransfer
+        // this is used in the function safeMintBatchForArtistsAndTransfer
         // in order to allow the team to mint a bunch of NFTs for some artists
         // and to transfer one of those NFTs to a given recipient
-        // used for giveaways & co
+        // used for giveaways & treasure hunt
         if (_safeMintBatchForArtistsAndTransferFlag == 2) {
             return true;
         }
@@ -301,6 +304,9 @@ contract EditionsRegistry is
             _setTokenRoyalty(id, royaltiesRecipient, royalties);
         }
 
-        emit Mint(id, data);
+        // if data, then fire a mint event
+        if (data.length > 0) {
+            emit Mint(id, data);
+        }
     }
 }
