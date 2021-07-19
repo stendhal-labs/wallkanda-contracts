@@ -170,7 +170,7 @@ contract EditionsRegistry is
     }
 
     /// @dev Post Upgrade, called after an upgrade of the contract
-    function postUpgrade() public proxied {
+    function postUpgrade() external onlyOwner {
         // reset _safeMintBatchForArtistsAndTransferFlag to be able to do the
         // Paris treasure hunt generation call
         _safeMintBatchForArtistsAndTransferFlag = 0;
@@ -220,7 +220,7 @@ contract EditionsRegistry is
         // set current id to highest id
         currentId = _currentId;
 
-        // set flag to 1 so we can never use this function again
+        // set flag to 1 so we do not use this function again without updating the contract
         _safeMintBatchForArtistsAndTransferFlag = 1;
     }
 
