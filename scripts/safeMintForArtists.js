@@ -3,6 +3,7 @@ const hre = require('hardhat');
 const { deployments, getNamedAccounts, ethers } = require('hardhat');
 
 async function main() {
+    throw new Error('ALREADY DEPLOYED MAINNET');
     if (!process.env.HUNT_RECIPIENT) {
         console.error(
             'Run the command with: HUNT_RECIPIENT=0xaddress npx hardhat run scripts/safeMintForArtists.js --network yourNetwork',

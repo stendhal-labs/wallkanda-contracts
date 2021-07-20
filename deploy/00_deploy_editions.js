@@ -18,19 +18,22 @@ module.exports = async ({ getNamedAccounts, deployments, ethers }) => {
                         process.env.OPENSEA_REGISTRY,
                     ],
                 },
+                // onUpgrade: {
+                //     methodName: 'postUpgrade',
+                // },
             },
         },
         log: true,
     });
 
-    await execute(
-        'EditionsRegistry',
-        { from: deployer, log: true },
-        'setBaseURI',
-        process.env.EDITIONS_URI.replace(
-            '{contract}',
-            deployResult.address.toLowerCase(),
-        ),
-    );
+    // await execute(
+    //     'EditionsRegistry',
+    //     { from: deployer, log: true },
+    //     'setBaseURI',
+    //     process.env.EDITIONS_URI.replace(
+    //         '{contract}',
+    //         deployResult.address.toLowerCase(),
+    //     ),
+    // );
 };
 module.exports.tags = ['EditionsRegistry'];
