@@ -1,8 +1,8 @@
 {
 	"name": "Wallkanda Artworks",
-	"description": "Reserved for Future Use",
+	"description": "Wallkanda Artworks are a curated collection of art in the public space. Wallkanda makes it easy to create, sell, and collect rare digital art based on real life urban art. On Wallkanda, anyone can register but only certified urban artists can mint their artworks. We also build special tools for artists and organize unique events to onboard new collectors and artists in the crypto streets!",
 	"image": "https://stendhal.ai/wallkanda/logo-square.png",
 	"external_link": "https://wallkanda.art",
 	"seller_fee_basis_points": 250,
-	"fee_recipient": "0x5dB7C94A9f1Ce05d70167de1BDaa12da7a800Fb6"
+	"fee_recipient": "0xdC58F594E82F7592163687915F61b031D2102fDb"
 }
