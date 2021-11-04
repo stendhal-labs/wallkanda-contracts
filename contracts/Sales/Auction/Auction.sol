@@ -274,7 +274,9 @@ contract Auction is BaseExchange, AuctionStorage {
                 auctionParams.tokenId,
                 1,
                 0, // buyerServiceFee can only be 0 on auctions
-                sellerServiceFee
+                sellerServiceFee,
+                address(0),
+                0
             );
     }
 

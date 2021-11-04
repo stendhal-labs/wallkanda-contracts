@@ -3,7 +3,6 @@ module.exports = async ({ getNamedAccounts, deployments, ethers }) => {
     const { deploy, execute } = deployments;
 
     const { deployer, exchangeSigner } = await getNamedAccounts();
-
     const TransferProxy = await deployments.get('TransferProxy');
 
     const deployResult = await deploy('Exchange', {

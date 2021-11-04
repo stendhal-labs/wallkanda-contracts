@@ -112,6 +112,7 @@ describe('Exchange 721', function () {
     async function signOrder(order) {
         // hash order
         const message = await saleContract.prepareOrderMessage(order);
+
         // sign message
         return await signMessage(message);
     }
@@ -153,7 +154,16 @@ describe('Exchange 721', function () {
     }
 
     async function getOrderValue(order, saleMeta, buying = 1) {
-        return await saleContract.computeValues(order, buying, saleMeta);
+        return await saleContract.computeValues(
+            {
+                orderData: order,
+                revenueRecipient: ethers.constants.AddressZero,
+                donationRecipient: ethers.constants.AddressZero,
+                donationPercentage: 0,
+            },
+            buying,
+            saleMeta,
+        );
     }
 
     it('Should fail because signature is not the one expected', async () => {

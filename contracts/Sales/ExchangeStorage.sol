@@ -68,6 +68,16 @@ contract ExchangeStorage {
         uint256 expiration;
     }
 
+    struct OrderDataV2 {
+        OrderData orderData;
+        /* address of the recipient of sale revenu (for collaborations, using a splitter, or just for a vault) */
+        address revenueRecipient;
+        /* donation / curation recipient */
+        address donationRecipient;
+        /* donation / curation percentage */
+        uint256 donationPercentage;
+    }
+
     struct OrderMeta {
         /* buyer */
         address buyer;

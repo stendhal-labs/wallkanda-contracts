@@ -8,7 +8,7 @@ import './ITransferProxy.sol';
 import '../../Access/OwnableOperatorControl.sol';
 
 contract TransferProxy is ITransferProxy, OwnableOperatorControl {
-    function initialize() public initializer {
+    constructor() {
         __OwnableOperatorControl_init();
     }
 

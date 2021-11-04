@@ -24,6 +24,10 @@ contract BaseExchange is OwnableUpgradeable, MessageSigning {
         uint256 royaltiesAmount;
         /* royalties recipient */
         address royaltiesRecipient;
+        /* donation recipient */
+        address donationRecipient;
+        /* donation value */
+        uint256 donationValue;
     }
 
     function __BaseExchange_init(
@@ -56,7 +60,9 @@ contract BaseExchange is OwnableUpgradeable, MessageSigning {
         uint256 tokenId,
         uint256 amount,
         uint256 buyerServiceFee,
-        uint256 sellerServiceFee
+        uint256 sellerServiceFee,
+        address donationRecipient,
+        uint256 donationPercentage
     ) internal view returns (OrderTransfers memory orderTransfers) {
         orderTransfers.total = unitPrice * amount;
         uint256 buyerFee = (orderTransfers.total * buyerServiceFee) / 10000;
@@ -87,6 +93,19 @@ contract BaseExchange is OwnableUpgradeable, MessageSigning {
                 orderTransfers.sellerEndValue -
                 royaltiesAmount;
         }
+
+        // if this sale has donation / curation
+        // if (donationPercentage > 0 && donationPercentage <= 10000) {
+        //     // calculate donation %
+        //     orderTransfers.donationValue =
+        //         (orderTransfers.total * donationPercentage) /
+        //         10000;
+
+        //     // set recipient
+        //     orderTransfers.donationRecipient = donationRecipient;
+        //     // remove donationValue from endValue
+        //     orderTransfers.sellerEndValue -= orderTransfers.donationValue;
+        // }
     }
 
     function _getRoyalties(

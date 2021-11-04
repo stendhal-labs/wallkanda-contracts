@@ -205,7 +205,16 @@ describe('Exchange ERC1155 With royalties', function () {
     }
 
     async function getOrderValue(order, saleMeta, buying = 1) {
-        return await saleContract.computeValues(order, buying, saleMeta);
+        return await saleContract.computeValues(
+            {
+                orderData: order,
+                revenueRecipient: ethers.constants.AddressZero,
+                donationRecipient: ethers.constants.AddressZero,
+                donationPercentage: 0,
+            },
+            buying,
+            saleMeta,
+        );
     }
 
     // only check if balances of all actors (buyer, seller, royalties recipient, servicefee recipient) match

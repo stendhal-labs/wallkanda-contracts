@@ -36,6 +36,14 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
         return keccak256(abi.encode(order));
     }
 
+    function prepareOrderV2Message(OrderDataV2 memory order)
+        public
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(order));
+    }
+
     function prepareOrderMetaMessage(
         Signature memory orderSig,
         OrderMeta memory saleMeta
@@ -50,19 +58,39 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
      * It will also help when we introduce tokens for payment
      */
     function computeValues(
-        OrderData memory order,
+        OrderDataV2 memory order,
         uint256 amount,
         OrderMeta memory saleMeta
     ) public view returns (OrderTransfers memory orderTransfers) {
         return
             _computeValues(
-                order.inAsset.quantity,
-                order.outAsset.token,
-                order.outAsset.tokenId,
+                order.orderData.inAsset.quantity,
+                order.orderData.outAsset.token,
+                order.orderData.outAsset.tokenId,
                 amount,
                 saleMeta.buyerFee,
-                saleMeta.sellerFee
+                saleMeta.sellerFee,
+                order.donationRecipient,
+                order.donationPercentage
             );
+    }
+
+    function buyV2(
+        OrderDataV2 memory order,
+        Signature memory sig,
+        uint256 amount, // quantity to buy
+        OrderMeta memory saleMeta,
+        Signature memory saleMetaSignature
+    ) external payable nonReentrant {
+        _verifyOrderData(order.orderData, amount);
+
+        // verify exchange meta for buy
+        _verifyOrderMeta(sig, saleMeta, saleMetaSignature);
+
+        // verify order signature
+        _validateOrderV2Sig(order, sig);
+
+        _buy(order, amount, saleMeta);
     }
 
     function buy(
@@ -72,21 +100,7 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
         OrderMeta memory saleMeta,
         Signature memory saleMetaSignature
     ) external payable nonReentrant {
-        // verify that order is for this contract
-        require(order.exchange == address(this), 'Sale: Wrong exchange.');
-
-        // verify if this order is for a specific address
-        if (order.taker != address(0)) {
-            require(msg.sender == order.taker, 'Sale: Wrong user.');
-        }
-
-        require(
-            // amount must be > 0
-            (amount > 0) &&
-                // and amount must be <= at maxPerBuy
-                (order.maxPerBuy == 0 || amount <= order.maxPerBuy),
-            'Sale: Wrong amount.'
-        );
+        _verifyOrderData(order, amount);
 
         // verify exchange meta for buy
         _verifyOrderMeta(sig, saleMeta, saleMetaSignature);
@@ -94,40 +108,11 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
         // verify order signature
         _validateOrderSig(order, sig);
 
-        // update order state
-        bool closed = _verifyOpenAndModifyState(order, amount);
+        // create an orderV2 out of old order
+        OrderDataV2 memory orderV2;
+        orderV2.orderData = order;
 
-        // transfer everything
-        OrderTransfers memory orderTransfers = _doTransfers(
-            order,
-            amount,
-            saleMeta
-        );
-
-        // emit buy
-        emit Buy(
-            order.orderNonce,
-            order.outAsset.token,
-            order.outAsset.tokenId,
-            amount,
-            order.maker,
-            order.inAsset.token,
-            order.inAsset.tokenId,
-            order.inAsset.quantity,
-            msg.sender,
-            orderTransfers.total,
-            orderTransfers.serviceFees
-        );
-
-        // if order is closed, emit close.
-        if (closed) {
-            emit CloseOrder(
-                order.orderNonce,
-                order.outAsset.token,
-                order.outAsset.tokenId,
-                order.maker
-            );
-        }
+        _buy(orderV2, amount, saleMeta);
     }
 
     function cancelOrder(
@@ -158,6 +143,17 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
         );
     }
 
+    function _validateOrderV2Sig(OrderDataV2 memory order, Signature memory sig)
+        public
+        pure
+    {
+        require(
+            recoverMessageSignature(prepareOrderV2Message(order), sig) ==
+                order.orderData.maker,
+            'Sale: Incorrect order signature'
+        );
+    }
+
     // returns orderId for completion
     function _getOrderId(
         address token,
@@ -168,6 +164,24 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
     ) internal pure returns (bytes32) {
         return
             keccak256(abi.encode(token, tokenId, quantity, maker, orderNonce));
+    }
+
+    function _verifyOrderData(OrderData memory order, uint256 amount) internal {
+        // verify that order is for this contract
+        require(order.exchange == address(this), 'Sale: Wrong exchange.');
+
+        // verify if this order is for a specific address
+        if (order.taker != address(0)) {
+            require(msg.sender == order.taker, 'Sale: Wrong user.');
+        }
+
+        require(
+            // amount must be > 0
+            (amount > 0) &&
+                // and amount must be <= at maxPerBuy
+                (order.maxPerBuy == 0 || amount <= order.maxPerBuy),
+            'Sale: Wrong amount.'
+        );
     }
 
     function _verifyOpenAndModifyState(
@@ -227,7 +241,7 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
     }
 
     function _doTransfers(
-        OrderData memory order,
+        OrderDataV2 memory order,
         uint256 amount,
         OrderMeta memory saleMeta
     ) internal returns (OrderTransfers memory orderTransfers) {
@@ -258,27 +272,72 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
 
             // send what is left to seller
             if (orderTransfers.sellerEndValue > 0) {
-                payable(order.maker).transfer(orderTransfers.sellerEndValue);
+                payable(
+                    order.revenueRecipient != address(0)
+                        ? order.revenueRecipient
+                        : order.orderData.maker
+                ).transfer(orderTransfers.sellerEndValue);
             }
         }
 
         // send token to buyer
-        if (order.outAsset.tokenType == TokenType.ERC1155) {
+        if (order.orderData.outAsset.tokenType == TokenType.ERC1155) {
             transferProxy.erc1155SafeTransferFrom(
-                order.outAsset.token,
-                order.maker,
+                order.orderData.outAsset.token,
+                order.orderData.maker,
                 msg.sender,
-                order.outAsset.tokenId,
+                order.orderData.outAsset.tokenId,
                 amount,
                 ''
             );
         } else {
             transferProxy.erc721SafeTransferFrom(
-                order.outAsset.token,
-                order.maker,
+                order.orderData.outAsset.token,
+                order.orderData.maker,
                 msg.sender,
-                order.outAsset.tokenId,
+                order.orderData.outAsset.tokenId,
                 ''
+            );
+        }
+    }
+
+    function _buy(
+        OrderDataV2 memory orderV2,
+        uint256 amount, // quantity to buy
+        OrderMeta memory saleMeta
+    ) internal {
+        // update order state
+        bool closed = _verifyOpenAndModifyState(orderV2.orderData, amount);
+
+        // transfer everything
+        OrderTransfers memory orderTransfers = _doTransfers(
+            orderV2,
+            amount,
+            saleMeta
+        );
+
+        // emit buy
+        emit Buy(
+            orderV2.orderData.orderNonce,
+            orderV2.orderData.outAsset.token,
+            orderV2.orderData.outAsset.tokenId,
+            amount,
+            orderV2.orderData.maker,
+            orderV2.orderData.inAsset.token,
+            orderV2.orderData.inAsset.tokenId,
+            orderV2.orderData.inAsset.quantity,
+            msg.sender,
+            orderTransfers.total,
+            orderTransfers.serviceFees
+        );
+
+        // if orderV2.orderData is closed, emit close.
+        if (closed) {
+            emit CloseOrder(
+                orderV2.orderData.orderNonce,
+                orderV2.orderData.outAsset.token,
+                orderV2.orderData.outAsset.tokenId,
+                orderV2.orderData.maker
             );
         }
     }

@@ -162,7 +162,16 @@ describe('Exchange ERC1155', function () {
     }
 
     async function getOrderValue(order, saleMeta, buying = 1) {
-        return await saleContract.computeValues(order, buying, saleMeta);
+        return await saleContract.computeValues(
+            {
+                orderData: order,
+                revenueRecipient: ethers.constants.AddressZero,
+                donationRecipient: ethers.constants.AddressZero,
+                donationPercentage: 0,
+            },
+            buying,
+            saleMeta,
+        );
     }
 
     it('Should transfer ERC1155 and close order', async () => {

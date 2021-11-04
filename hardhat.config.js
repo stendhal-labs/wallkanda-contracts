@@ -50,7 +50,7 @@ module.exports = {
             ],
         },
         mainnet: {
-            gasPrice: 25000000000,
+            gasPrice: 50000000000,
             url: process.env.PROVIDER,
             accounts: [
                 process.env.DEPLOYER_PKEY,
