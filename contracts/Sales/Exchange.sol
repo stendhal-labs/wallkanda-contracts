@@ -270,6 +270,12 @@ contract Exchange is BaseExchange, ReentrancyGuardUpgradeable, ExchangeStorage {
                 );
             }
 
+            if (orderTransfers.donationValue > 0) {
+                payable(orderTransfers.donationRecipient).transfer(
+                    orderTransfers.donationValue
+                );
+            }
+
             // send what is left to seller
             if (orderTransfers.sellerEndValue > 0) {
                 payable(

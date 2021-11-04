@@ -95,17 +95,17 @@ contract BaseExchange is OwnableUpgradeable, MessageSigning {
         }
 
         // if this sale has donation / curation
-        // if (donationPercentage > 0 && donationPercentage <= 10000) {
-        //     // calculate donation %
-        //     orderTransfers.donationValue =
-        //         (orderTransfers.total * donationPercentage) /
-        //         10000;
+        if (donationPercentage > 0 && donationPercentage <= 10000) {
+            // calculate donation %
+            orderTransfers.donationValue =
+                (orderTransfers.total * donationPercentage) /
+                10000;
 
-        //     // set recipient
-        //     orderTransfers.donationRecipient = donationRecipient;
-        //     // remove donationValue from endValue
-        //     orderTransfers.sellerEndValue -= orderTransfers.donationValue;
-        // }
+            // set recipient
+            orderTransfers.donationRecipient = donationRecipient;
+            // remove donationValue from endValue
+            orderTransfers.sellerEndValue -= orderTransfers.donationValue;
+        }
     }
 
     function _getRoyalties(
